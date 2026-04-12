@@ -7,3 +7,4 @@ includes=src
 [deps]
 m2gfx
 m2sys
+m2blitter=path:../m2blitter

@@ -6,6 +6,9 @@ FROM Sys IMPORT m2sys_fopen, m2sys_fclose, m2sys_fread_bytes,
                m2sys_file_exists;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT LoadBMPTexture, LoadBMPScaled, LoadBMPKeyedTexture;
+FROM PixBuf IMPORT PBuf, LoadPNG AS PBLoadPNG,
+                   LoadPNGPal AS PBLoadPNGPal,
+                   Create AS PBCreate, SetPal AS PBSetPal;
 
 CONST
   MaxImgs = 24;
@@ -92,6 +95,11 @@ BEGIN
   activeSect := 0; activeMap := 0;
   cachedCount := 0;
   ovlCount := 0;
+  shadowPB := NIL;
+  pbCount := 0;
+  FOR i := 0 TO 3 DO tilePB[i] := NIL END;
+  palRef := PBCreate(1, 1);
+  IF palRef # NIL THEN SetAmigaPal(palRef) END;
   InitRegionTable;
   Assign("rb", modeBuf);
   FOR i := 0 TO 3 DO tileTex[i] := NIL END;
@@ -167,6 +175,69 @@ BEGIN
   RETURN tex
 END LoadOvlCached;
 
+VAR
+  pbNum: ARRAY [0..23] OF INTEGER;
+  pbBuf: ARRAY [0..23] OF ADDRESS;
+  pbCount: INTEGER;
+  palRef: PBuf;  (* 1x1 PixBuf holding the Amiga palette *)
+
+PROCEDURE SetAmigaPal(pb: PBuf);
+BEGIN
+  PBSetPal(pb,  0,   0,   0,   0);
+  PBSetPal(pb,  1, 255, 255, 255);
+  PBSetPal(pb,  2, 238, 153, 102);
+  PBSetPal(pb,  3, 187, 102,  51);
+  PBSetPal(pb,  4, 102,  51,  17);
+  PBSetPal(pb,  5, 119, 187, 255);
+  PBSetPal(pb,  6,  51,  51,  51);
+  PBSetPal(pb,  7, 221, 187, 136);
+  PBSetPal(pb,  8,  34,  34,  51);
+  PBSetPal(pb,  9,  68,  68,  85);
+  PBSetPal(pb, 10, 136, 136, 153);
+  PBSetPal(pb, 11, 187, 187, 204);
+  PBSetPal(pb, 12,  85,  34,  17);
+  PBSetPal(pb, 13, 153,  68,  17);
+  PBSetPal(pb, 14, 255, 136,  34);
+  PBSetPal(pb, 15, 255, 204, 119);
+  PBSetPal(pb, 16,   0,  68,   0);
+  PBSetPal(pb, 17,   0, 119,   0);
+  PBSetPal(pb, 18,   0, 187,   0);
+  PBSetPal(pb, 19, 102, 255, 102);
+  PBSetPal(pb, 20,   0,   0,  85);
+  PBSetPal(pb, 21,   0,   0, 153);
+  PBSetPal(pb, 22,   0,   0, 221);
+  PBSetPal(pb, 23,  51, 119, 255);
+  PBSetPal(pb, 24, 204,   0,   0);
+  PBSetPal(pb, 25, 255,  85,   0);
+  PBSetPal(pb, 26, 255, 170,   0);
+  PBSetPal(pb, 27, 255, 255, 102);
+  PBSetPal(pb, 28, 238, 187, 102);
+  PBSetPal(pb, 29, 238, 170,  85);
+  PBSetPal(pb, 30,   0,   0, 255);
+  PBSetPal(pb, 31, 187, 221, 255)
+END SetAmigaPal;
+
+PROCEDURE LoadPBCached(num: INTEGER): ADDRESS;
+VAR i: INTEGER;
+    pb: ADDRESS;
+BEGIN
+  FOR i := 0 TO pbCount - 1 DO
+    IF pbNum[i] = num THEN RETURN pbBuf[i] END
+  END;
+  MakePath("image_", num, 3, ".png");
+  IF palRef # NIL THEN
+    pb := PBLoadPNGPal(pathBuf, palRef, 32)
+  ELSE
+    pb := PBLoadPNG(pathBuf, 32)
+  END;
+  IF (pb # NIL) AND (pbCount < MaxImgs) THEN
+    pbNum[pbCount] := num;
+    pbBuf[pbCount] := pb;
+    INC(pbCount)
+  END;
+  RETURN pb
+END LoadPBCached;
+
 PROCEDURE PreloadAll(): BOOLEAN;
 VAR i, j: INTEGER;
 BEGIN
@@ -203,6 +274,14 @@ BEGIN
         WriteString("overlay load failed"); WriteLn
       END
     END
+  END;
+
+  (* Load shadow mask PixBuf *)
+  shadowPB := PBLoadPNG("assets/shadow_mem.png", 256);
+  IF shadowPB = NIL THEN
+    WriteString("*** Shadow mask failed ***"); WriteLn
+  ELSE
+    WriteString("Shadow mask loaded"); WriteLn
   END;
 
   (* Load brother sprite sheets with magenta color key *)
@@ -252,7 +331,8 @@ BEGIN
   (* Point tileTex to cached textures — instant *)
   FOR i := 0 TO 3 DO
     tileTex[i] := LoadImgCached(regions[regionIdx].image[i]);
-    tileOverlay[i] := LoadOvlCached(regions[regionIdx].image[i])
+    tileOverlay[i] := LoadOvlCached(regions[regionIdx].image[i]);
+    tilePB[i] := LoadPBCached(regions[regionIdx].image[i])
   END;
 
   currentRegion := regionIdx;
@@ -349,6 +429,14 @@ BEGIN
   (* High nibble of byte 1 = terrain category *)
   RETURN (ORD(terraMem[cm + 1]) DIV 16) MOD 16
 END GetTerrainAt;
+
+PROCEDURE GetMapTag(secByte: INTEGER): INTEGER;
+VAR cm: INTEGER;
+BEGIN
+  cm := secByte * 4;
+  IF (cm < 0) OR (cm >= 1024) THEN RETURN 0 END;
+  RETURN ORD(terraMem[cm])
+END GetMapTag;
 
 PROCEDURE GetMaskType(secByte: INTEGER): INTEGER;
 VAR cm: INTEGER;

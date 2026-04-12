@@ -1,5 +1,6 @@
 DEFINITION MODULE Render;
 
+PROCEDURE InitOverlay;
 PROCEDURE DrawWorld;
 PROCEDURE DrawOverlay;
 PROCEDURE DrawItems;

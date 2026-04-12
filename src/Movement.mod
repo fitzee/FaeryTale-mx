@@ -43,13 +43,26 @@ PROCEDURE ProxCheck(x, y, actorIdx: INTEGER): INTEGER;
 VAR
   terrain, t, j, dx, dy: INTEGER;
 BEGIN
-  (* Terrain collision — check two points like original prox():
-     (x+4, y+2) and (x-4, y+2) *)
+  (* Terrain collision — matches original prox() in fsubs.asm:
+     Check 1: (x+4, y+2) — blocked if terrain=1 or terrain>=10
+     Check 2: (x-4, y+2) — blocked if terrain=1 or terrain>=8
+     Player (actorIdx=0) can walk through terrain 8,9 (swamp/palace) *)
   IF currentRegion >= 0 THEN
     t := GetTerrainAt(x + 4, y + 2);
-    IF (t = 1) OR ((t >= 10) AND (t # 15)) THEN RETURN t END;
+    IF t = 1 THEN RETURN t END;
+    IF t >= 10 THEN
+      IF (actorIdx = 0) AND (t = 15) THEN (* door — passable for player *)
+      ELSE RETURN t
+      END
+    END;
     t := GetTerrainAt(x - 4, y + 2);
-    IF (t = 1) OR ((t >= 10) AND (t # 15)) THEN RETURN t END
+    IF t = 1 THEN RETURN t END;
+    IF t >= 8 THEN
+      IF (actorIdx = 0) AND ((t = 8) OR (t = 9) OR (t = 15)) THEN
+        (* player walks through swamp/palace/doors *)
+      ELSE RETURN t
+      END
+    END
   ELSE
     (* Fallback handcrafted world *)
     terrain := GetTerrain(x, y);

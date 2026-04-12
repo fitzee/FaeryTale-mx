@@ -31,6 +31,8 @@ VAR
   currentRegion: INTEGER;
   tileTex: ARRAY [0..3] OF ADDRESS;
   tileOverlay: ARRAY [0..3] OF ADDRESS;  (* same tiles with black=transparent *)
+  tilePB: ARRAY [0..3] OF ADDRESS;      (* tile PixBufs for blitter *)
+  shadowPB: ADDRESS;                     (* shadow_mem mask PixBuf *)
   hudTex:  ADDRESS;
   brotherTex: ARRAY [0..2] OF ADDRESS;  (* Julian=0, Phillip=1, Kevin=2 *)
   xReg, yReg: INTEGER;
@@ -42,6 +44,7 @@ PROCEDURE SwitchRegion(regionIdx: INTEGER);
 PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
 PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
 PROCEDURE GetMaskType(secByte: INTEGER): INTEGER;
+PROCEDURE GetMapTag(secByte: INTEGER): INTEGER;
 PROCEDURE IsBlocked(x, y: INTEGER): BOOLEAN;
 PROCEDURE TerrainSpeedAt(x, y: INTEGER): INTEGER;
 PROCEDURE DetectRegion(px, py: INTEGER): INTEGER;

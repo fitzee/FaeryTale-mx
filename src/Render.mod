@@ -18,8 +18,15 @@ FROM Items IMPORT items, itemCount, inventory,
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
 FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
-FROM Assets IMPORT tileTex, tileOverlay, hudTex, brotherTex,
-                   currentRegion, GetSectorByte, GetMaskType;
+FROM Assets IMPORT tileTex, tileOverlay, tilePB, shadowPB, hudTex,
+                   brotherTex, currentRegion, GetSectorByte, GetMaskType,
+                   GetMapTag;
+FROM PixBuf IMPORT PBuf, Create AS PBCreate, Clear AS PBClear,
+                   Render AS PBRender, SetPalAlpha, SetPal,
+                   PalR, PalG, PalB;
+FROM GfxBridge IMPORT gfx_pb_flush_tex;
+FROM Texture IMPORT Create AS TexCreate, Tex, SetBlendMode;
+FROM Blitter IMPORT ShadowBlitRGBA;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
                  MSave, MKeys, MGive;
@@ -33,6 +40,19 @@ CONST
   TilePixW = 16;
   TilePixH = 32;
 
+VAR
+  overlayPB: PBuf;
+  overlayTex: Tex;
+
+PROCEDURE InitOverlay;
+BEGIN
+  overlayPB := PBCreate(PlayW, PlayH);
+  overlayTex := TexCreate(ren, PlayW, PlayH);
+  IF overlayTex # NIL THEN
+    SetBlendMode(overlayTex, 1)  (* BLEND_ALPHA *)
+  END
+END InitOverlay;
+
 PROCEDURE S(v: INTEGER): INTEGER;
 BEGIN
   RETURN v * Scale
@@ -40,11 +60,9 @@ END S;
 
 (* ---- World drawing ---- *)
 
-PROCEDURE DrawTilesPass(overlayPass: BOOLEAN);
-VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
+PROCEDURE DrawWorldTiled;
+VAR imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
-    isOverlay: BOOLEAN;
-    tex: ADDRESS;
 BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
@@ -60,38 +78,18 @@ BEGIN
       secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
       imgIdx := secByte DIV 64;
       tileY := (secByte MOD 64) * TilePixH;
+      sx := imx * TilePixW - camX;
+      sy := imy * TilePixH - camY;
 
-      maskType := GetMaskType(secByte);
-      isOverlay := maskType >= 1;
-
-      IF overlayPass = isOverlay THEN
-        sx := imx * TilePixW - camX;
-        sy := imy * TilePixH - camY;
-
-        IF (imgIdx >= 0) AND (imgIdx <= 3) THEN
-          (* Overlay pass uses keyed textures (black = transparent).
-             Ground pass uses normal textures. *)
-          IF overlayPass THEN
-            tex := tileOverlay[imgIdx]
-          ELSE
-            tex := tileTex[imgIdx]
-          END;
-          IF tex # NIL THEN
-            DrawTexRegion(tex,
-                          0, tileY, TilePixW, TilePixH,
-                          S(sx), S(sy), S(TilePixW), S(TilePixH))
-          END
-        END
+      IF (imgIdx >= 0) AND (imgIdx <= 3) AND (tileTex[imgIdx] # NIL) THEN
+        DrawTexRegion(tileTex[imgIdx],
+                      0, tileY, TilePixW, TilePixH,
+                      S(sx), S(sy), S(TilePixW), S(TilePixH))
       END
     END
   END;
 
   ClearClip(ren)
-END DrawTilesPass;
-
-PROCEDURE DrawWorldTiled;
-BEGIN
-  DrawTilesPass(FALSE)  (* ground pass only *)
 END DrawWorldTiled;
 
 PROCEDURE DrawWorldFallback;
@@ -151,10 +149,124 @@ BEGIN
   END
 END DrawWorld;
 
-PROCEDURE DrawOverlay;
+PROCEDURE SetAmigaPalette(pb: PBuf);
 BEGIN
-  (* TODO: proper masking via m2blitter library.
-     For now, overlay pass is disabled — character draws on top of tiles. *)
+  IF pb = NIL THEN RETURN END;
+  (* Original Amiga 32-color pagecolors palette *)
+  SetPalAlpha(pb, 0, 0, 0, 0, 0);  (* transparent *)
+  SetPal(pb,  1, 255, 255, 255);  (* 0xFFF *)
+  SetPal(pb,  2, 238, 153, 102);  (* 0xE96 *)
+  SetPal(pb,  3, 187, 102,  51);  (* 0xB63 *)
+  SetPal(pb,  4, 102,  51,  17);  (* 0x631 *)
+  SetPal(pb,  5, 119, 187, 255);  (* 0x7BF *)
+  SetPal(pb,  6,  51,  51,  51);  (* 0x333 *)
+  SetPal(pb,  7, 221, 187, 136);  (* 0xDB8 *)
+  SetPal(pb,  8,  34,  34,  51);  (* 0x223 *)
+  SetPal(pb,  9,  68,  68,  85);  (* 0x445 *)
+  SetPal(pb, 10, 136, 136, 153);  (* 0x889 *)
+  SetPal(pb, 11, 187, 187, 204);  (* 0xBBC *)
+  SetPal(pb, 12,  85,  34,  17);  (* 0x521 *)
+  SetPal(pb, 13, 153,  68,  17);  (* 0x941 *)
+  SetPal(pb, 14, 255, 136,  34);  (* 0xF82 *)
+  SetPal(pb, 15, 255, 204, 119);  (* 0xFC7 *)
+  SetPal(pb, 16,   0,  68,   0);  (* 0x040 *)
+  SetPal(pb, 17,   0, 119,   0);  (* 0x070 *)
+  SetPal(pb, 18,   0, 187,   0);  (* 0x0B0 *)
+  SetPal(pb, 19, 102, 255, 102);  (* 0x6F6 *)
+  SetPal(pb, 20,   0,   0,  85);  (* 0x005 *)
+  SetPal(pb, 21,   0,   0, 153);  (* 0x009 *)
+  SetPal(pb, 22,   0,   0, 221);  (* 0x00D *)
+  SetPal(pb, 23,  51, 119, 255);  (* 0x37F *)
+  SetPal(pb, 24, 204,   0,   0);  (* 0xC00 *)
+  SetPal(pb, 25, 255,  85,   0);  (* 0xF50 *)
+  SetPal(pb, 26, 255, 170,   0);  (* 0xFA0 *)
+  SetPal(pb, 27, 255, 255, 102);  (* 0xFF6 *)
+  SetPal(pb, 28, 238, 187, 102);  (* 0xEB6 *)
+  SetPal(pb, 29, 238, 170,  85);  (* 0xEA5 *)
+  SetPal(pb, 30,   0,   0, 255);  (* 0x00F *)
+  SetPal(pb, 31, 187, 221, 255)   (* 0xBDF *)
+END SetAmigaPalette;
+
+PROCEDURE DrawOverlay;
+VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
+    startIX, startIY, endIX, endIY: INTEGER;
+    pb: PBuf;
+    maskY: INTEGER;
+BEGIN
+  IF currentRegion < 0 THEN RETURN END;
+  IF (overlayPB = NIL) OR (overlayTex = NIL) THEN RETURN END;
+  IF shadowPB = NIL THEN RETURN END;
+
+  (* Clear: fill indexed with 0, convert to RGBA (all transparent) *)
+  SetPalAlpha(overlayPB, 0, 0, 0, 0, 0);
+  PBClear(overlayPB, 0);
+  PBRender(ren, overlayTex, overlayPB);
+
+  startIX := camX DIV TilePixW - 1;
+  startIY := camY DIV TilePixH - 1;
+  endIX := (camX + PlayW) DIV TilePixW + 1;
+  endIY := (camY + PlayH) DIV TilePixH + 1;
+  IF startIX < 0 THEN startIX := 0 END;
+  IF startIY < 0 THEN startIY := 0 END;
+
+  FOR imy := startIY TO endIY DO
+    FOR imx := startIX TO endIX DO
+      secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
+      maskType := GetMaskType(secByte);
+
+      IF maskType >= 1 THEN
+        imgIdx := secByte DIV 64;
+        tileY := (secByte MOD 64) * TilePixH;
+        sx := imx * TilePixW - camX;
+        sy := imy * TilePixH - camY;
+        maskY := GetMapTag(secByte) * TilePixH;
+
+        (* Apply mask type rules from original fmain.c:3599-3630:
+           0 = never overlay (already filtered above)
+           1 = overlay only when character is RIGHT of tile
+           2 = overlay only when character is ABOVE (north of) tile
+           3 = always overlay
+           4 = overlay when right AND above
+           5 = overlay when right OR above
+           6 = always if character is above tile row
+           7 = overlay when above, close range *)
+        IF (maskType = 1) AND (actors[0].absX <= imx * TilePixW) THEN
+          (* character is left of tile — skip *)
+        ELSIF (maskType = 2) AND (actors[0].absY >= imy * TilePixH) THEN
+          (* character is below/at tile — skip *)
+        ELSIF (maskType = 4) AND
+              ((actors[0].absX <= imx * TilePixW) OR
+               (actors[0].absY >= imy * TilePixH)) THEN
+          (* need both right AND above — skip if either fails *)
+        ELSIF (maskType = 5) AND
+              ((actors[0].absX <= imx * TilePixW) AND
+               (actors[0].absY >= imy * TilePixH)) THEN
+          (* need right OR above — skip only if both fail *)
+        ELSIF (sx + TilePixW > 0) AND (sx < PlayW) AND
+           (sy + TilePixH > 0) AND (sy < PlayH) AND
+           (imgIdx >= 0) AND (imgIdx <= 3) AND
+           (maskY + TilePixH <= 6144) THEN
+          pb := tilePB[imgIdx];
+          IF pb # NIL THEN
+            (* Use RGBA blit to avoid palette mismatch.
+               Reads RGB from source's palette, writes RGBA directly. *)
+            ShadowBlitRGBA(pb, shadowPB,
+                           0, tileY, 0, maskY,
+                           overlayPB,
+                           sx, sy, TilePixW, TilePixH)
+          END
+        END
+      END
+    END
+  END;
+
+  (* Upload RGBA buffer (with ShadowBlitRGBA's pixels) to texture *)
+  gfx_pb_flush_tex(overlayTex, overlayPB);
+  SetClip(ren, 0, 0, S(PlayW), S(PlayH));
+  TexDrawRegion(ren, overlayTex,
+                0, 0, PlayW, PlayH,
+                0, 0, S(PlayW), S(PlayH));
+  ClearClip(ren)
 END DrawOverlay;
 
 (* ---- Items ---- *)
