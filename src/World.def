@@ -7,8 +7,8 @@ CONST
   TileSize  = 16;
   WorldW    = 64;   (* tiles wide *)
   WorldH    = 64;   (* tiles tall *)
-  MaxCoord  = 32768;
-  CoordMask = 32767;
+  MaxCoord  = 65536;
+  CoordMask = 65535;
 
   (* Terrain types *)
   TerrGrass    = 0;

@@ -41,12 +41,15 @@ END NewY;
 
 PROCEDURE ProxCheck(x, y, actorIdx: INTEGER): INTEGER;
 VAR
-  terrain, j, dx, dy: INTEGER;
+  terrain, t, j, dx, dy: INTEGER;
 BEGIN
-  (* Terrain collision *)
+  (* Terrain collision — check two points like original prox():
+     (x+4, y+2) and (x-4, y+2) *)
   IF currentRegion >= 0 THEN
-    (* Use original game terrain data *)
-    IF IsBlocked(x, y) THEN RETURN 1 END
+    t := GetTerrainAt(x + 4, y + 2);
+    IF (t = 1) OR ((t >= 10) AND (t # 15)) THEN RETURN t END;
+    t := GetTerrainAt(x - 4, y + 2);
+    IF (t = 1) OR ((t >= 10) AND (t # 15)) THEN RETURN t END
   ELSE
     (* Fallback handcrafted world *)
     terrain := GetTerrain(x, y);

@@ -1,0 +1,13 @@
+DEFINITION MODULE Doors;
+
+(* Door system for building entry/exit.
+   86 doors mapping outdoor coordinates to interior coordinates. *)
+
+CONST
+  DoorCount = 86;
+
+PROCEDURE InitDoors;
+PROCEDURE CheckDoor(heroX, heroY, regionNum: INTEGER;
+                    VAR newX, newY, newRegion: INTEGER): BOOLEAN;
+
+END Doors.

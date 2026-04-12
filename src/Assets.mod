@@ -8,7 +8,7 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT LoadBMPTexture, LoadBMPScaled, LoadBMPKeyedTexture;
 
 CONST
-  MaxImgs = 20;
+  MaxImgs = 24;
 
 VAR
   pathBuf: ARRAY [0..127] OF CHAR;
@@ -23,9 +23,12 @@ VAR
   allTerr: ARRAY [0..10] OF ARRAY [0..511] OF CHAR;
 
   (* Texture cache *)
-  cachedNum: ARRAY [0..19] OF INTEGER;
-  cachedTex: ARRAY [0..19] OF ADDRESS;
+  cachedNum: ARRAY [0..23] OF INTEGER;
+  cachedTex: ARRAY [0..23] OF ADDRESS;
   cachedCount: INTEGER;
+  ovlNum: ARRAY [0..23] OF INTEGER;
+  ovlTex: ARRAY [0..23] OF ADDRESS;
+  ovlCount: INTEGER;
 
   (* Active pointers set by SwitchRegion — point into preloaded data *)
   activeSect: INTEGER;  (* 0 = sect032, 1 = sect096 *)
@@ -88,9 +91,11 @@ BEGIN
   xReg := 0; yReg := 0;
   activeSect := 0; activeMap := 0;
   cachedCount := 0;
+  ovlCount := 0;
   InitRegionTable;
   Assign("rb", modeBuf);
   FOR i := 0 TO 3 DO tileTex[i] := NIL END;
+  FOR i := 0 TO 3 DO tileOverlay[i] := NIL END;
   FOR i := 0 TO 2 DO brotherTex[i] := NIL END;
   IF m2sys_file_exists(ADR("assets/hiscreen.bmp")) = 1 THEN
     Assign("assets/", basePath)
@@ -144,6 +149,24 @@ BEGIN
   RETURN tex
 END LoadImgCached;
 
+PROCEDURE LoadOvlCached(num: INTEGER): ADDRESS;
+VAR i: INTEGER;
+    tex: ADDRESS;
+BEGIN
+  FOR i := 0 TO ovlCount - 1 DO
+    IF ovlNum[i] = num THEN RETURN ovlTex[i] END
+  END;
+  MakePath("image_", num, 3, ".bmp");
+  (* Load with black (0,0,0) as transparent color key *)
+  tex := LoadBMPKeyedTexture(pathBuf, 0, 0, 0);
+  IF (tex # NIL) AND (ovlCount < MaxImgs) THEN
+    ovlNum[ovlCount] := num;
+    ovlTex[ovlCount] := tex;
+    INC(ovlCount)
+  END;
+  RETURN tex
+END LoadOvlCached;
+
 PROCEDURE PreloadAll(): BOOLEAN;
 VAR i, j: INTEGER;
 BEGIN
@@ -172,10 +195,13 @@ BEGIN
     IF NOT LoadBin(pathBuf, ADR(allTerr[i]), TerrainSize) THEN RETURN FALSE END
   END;
 
-  (* Preload ALL image textures across all regions *)
+  (* Preload ALL image textures across all regions — normal + overlay *)
   FOR i := 0 TO NumRegions - 1 DO
     FOR j := 0 TO 3 DO
-      IF LoadImgCached(regions[i].image[j]) = NIL THEN RETURN FALSE END
+      IF LoadImgCached(regions[i].image[j]) = NIL THEN RETURN FALSE END;
+      IF LoadOvlCached(regions[i].image[j]) = NIL THEN
+        WriteString("overlay load failed"); WriteLn
+      END
     END
   END;
 
@@ -225,7 +251,8 @@ BEGIN
 
   (* Point tileTex to cached textures — instant *)
   FOR i := 0 TO 3 DO
-    tileTex[i] := LoadImgCached(regions[regionIdx].image[i])
+    tileTex[i] := LoadImgCached(regions[regionIdx].image[i]);
+    tileOverlay[i] := LoadOvlCached(regions[regionIdx].image[i])
   END;
 
   currentRegion := regionIdx;
@@ -323,12 +350,23 @@ BEGIN
   RETURN (ORD(terraMem[cm + 1]) DIV 16) MOD 16
 END GetTerrainAt;
 
+PROCEDURE GetMaskType(secByte: INTEGER): INTEGER;
+VAR cm: INTEGER;
+BEGIN
+  cm := secByte * 4;
+  IF (cm + 1 < 0) OR (cm + 1 >= 1024) THEN RETURN 0 END;
+  (* Low nibble of byte 1 = mask application type *)
+  RETURN ORD(terraMem[cm + 1]) MOD 16
+END GetMaskType;
+
 PROCEDURE IsBlocked(x, y: INTEGER): BOOLEAN;
 VAR t: INTEGER;
 BEGIN
   t := GetTerrainAt(x, y);
   (* Original prox: terrain 1 = blocked, terrain >= 10 = blocked.
-     Player ignores 8,9 (swamp/palace). *)
+     Player ignores 8,9 (swamp/palace).
+     Terrain 15 = door — passable so player can reach door trigger. *)
+  IF t = 15 THEN RETURN FALSE END;
   RETURN (t = 1) OR (t >= 10)
 END IsBlocked;
 
@@ -364,6 +402,9 @@ END DetectRegion;
 PROCEDURE CheckRegionSwitch(px, py: INTEGER);
 VAR newReg: INTEGER;
 BEGIN
+  (* Don't auto-switch when inside buildings (regions 8-9).
+     Door system handles exit back to outdoor regions. *)
+  IF currentRegion >= 8 THEN RETURN END;
   newReg := DetectRegion(px, py);
   IF (newReg # currentRegion) AND (newReg >= 0) AND (newReg < 8) THEN
     SwitchRegion(newReg)

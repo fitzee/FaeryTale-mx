@@ -1,9 +1,11 @@
 DEFINITION MODULE Render;
 
 PROCEDURE DrawWorld;
+PROCEDURE DrawOverlay;
 PROCEDURE DrawItems;
 PROCEDURE DrawActors;
 PROCEDURE DrawHUD;
+PROCEDURE DrawCompass;
 PROCEDURE DrawMenu;
 PROCEDURE DrawMinimap;
 PROCEDURE DrawRegionFade;

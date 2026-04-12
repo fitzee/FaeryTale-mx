@@ -1,7 +1,7 @@
 IMPLEMENTATION MODULE GameState;
 
 FROM Strings IMPORT Assign, Concat;
-FROM InOut IMPORT WriteString, WriteLn;
+FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT PollInput, InputState, DirNone,
                     ScreenW, TextH, Scale;
 FROM Actor IMPORT actors, actorCount, InitAll,
@@ -16,14 +16,15 @@ FROM Items IMPORT InitItems, CheckPickup, UseItem, InventoryCount,
                   SpawnItem,
                   ItemNone, ItemGold, ItemFood, ItemPotion,
                   ItemSword, ItemKey, ItemGem, ItemShield, ItemScroll;
-FROM DayNight IMPORT InitDayNight, UpdateDayNight;
+FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight;
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
                      activeBrother;
 FROM NPC IMPORT InitNPCs, CheckNPCInteract, GetSpeech;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
-                   CheckRegionSwitch, SwitchRegion;
+                   CheckRegionSwitch, SwitchRegion, DetectRegion;
 FROM Menu IMPORT HandleMenuKey, SetOptions;
+FROM Doors IMPORT InitDoors, CheckDoor;
 
 VAR
   input: InputState;
@@ -31,6 +32,7 @@ VAR
   hungerTimer: INTEGER;
   prevRegion: INTEGER;
   deathTimer: INTEGER;
+  doorCooldown: INTEGER;
   nameBuf: ARRAY [0..31] OF CHAR;
   msgBuf: ARRAY [0..63] OF CHAR;
 
@@ -44,12 +46,14 @@ BEGIN
   potionCooldown := 0;
   hungerTimer := 0;
   deathTimer := 0;
+  doorCooldown := 0;
 
   InitWorld;
   InitAll;
   InitItems;
   InitDayNight;
   InitBrothers;
+  InitDoors;
 
   (* Place player from active brother data *)
   RestoreBrotherState;
@@ -232,6 +236,29 @@ BEGIN
   END
 END UpdatePlayer;
 
+PROCEDURE CheckDoors;
+VAR newX, newY, newReg: INTEGER;
+BEGIN
+  IF doorCooldown > 0 THEN
+    DEC(doorCooldown);
+    RETURN
+  END;
+  IF CheckDoor(actors[0].absX, actors[0].absY, currentRegion,
+               newX, newY, newReg) THEN
+    actors[0].absX := newX;
+    actors[0].absY := newY;
+    IF newReg >= 0 THEN
+      SwitchRegion(newReg)
+    ELSE
+      (* Exiting indoor — force detect outdoor region *)
+      SwitchRegion(DetectRegion(newX, newY))
+    END;
+    regionFade := 10;
+    doorCooldown := 60;  (* ~1 second cooldown *)
+    ShowMessage("You enter...")
+  END
+END CheckDoors;
+
 PROCEDURE UpdateGame;
 BEGIN
   input.quit := FALSE;
@@ -253,6 +280,9 @@ BEGIN
   CheckEnemyDrops;
   UpdateEnemies;
   UpdateCombat;
+  (* Check for door entry/exit *)
+  CheckDoors;
+
   UpdateCamera(actors[0].absX, actors[0].absY);
   (* Region switch with fade *)
   prevRegion := currentRegion;
@@ -262,6 +292,11 @@ BEGIN
   END;
   IF regionFade > 0 THEN DEC(regionFade) END;
   UpdateDayNight;
+  IF currentRegion >= 8 THEN
+    (* Interiors are always fully lit *)
+    brightness := 100;
+    isNight := FALSE
+  END;
   SaveBrotherState;
 
   IF msgTimer > 0 THEN DEC(msgTimer) END;

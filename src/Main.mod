@@ -5,11 +5,13 @@ FROM Platform IMPORT Init, Shutdown, BeginFrame, EndFrame,
                     GetTicks, DelayMs, ren;
 FROM GameState IMPORT InitGame, UpdateGame, running, FrameTime,
                       mapToggled;
-FROM Render IMPORT DrawWorld, DrawItems, DrawActors, DrawHUD, DrawMenu,
-                   DrawRegionFade, DrawMessage;
+FROM Render IMPORT DrawWorld, DrawOverlay, DrawItems, DrawActors,
+                   DrawHUD, DrawCompass, DrawMenu, DrawRegionFade,
+                   DrawMessage;
 FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
 FROM BmFont IMPORT LoadFont;
+FROM Compass IMPORT InitCompass;
 
 VAR
   frameStart, elapsed: INTEGER;
@@ -27,6 +29,7 @@ BEGIN
     WriteString("Warning: font load failed"); WriteLn
   END;
   InitMenus;
+  InitCompass(ren);
   InitGame;
   InitDebugMap;
 
@@ -41,8 +44,10 @@ BEGIN
     DrawWorld;
     DrawItems;
     DrawActors;
+    DrawOverlay;
     DrawRegionFade;
     DrawHUD;
+    DrawCompass;
     DrawMenu;
     DrawMessage;
     EndFrame;

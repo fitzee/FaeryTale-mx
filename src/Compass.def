@@ -1,0 +1,11 @@
+DEFINITION MODULE Compass;
+
+(* Compass direction indicator for the HUD.
+   Pre-renders overlay textures from original nhinor/nhivar bitmap data. *)
+
+FROM Gfx IMPORT Renderer;
+
+PROCEDURE InitCompass(ren: Renderer);
+PROCEDURE DrawCompass(ren: Renderer; dir: INTEGER);
+
+END Compass.

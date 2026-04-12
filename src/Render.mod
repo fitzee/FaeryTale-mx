@@ -18,8 +18,8 @@ FROM Items IMPORT items, itemCount, inventory,
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
 FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
-FROM Assets IMPORT tileTex, hudTex, brotherTex, currentRegion,
-                   GetSectorByte;
+FROM Assets IMPORT tileTex, tileOverlay, hudTex, brotherTex,
+                   currentRegion, GetSectorByte, GetMaskType;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
                  MSave, MKeys, MGive;
@@ -40,9 +40,11 @@ END S;
 
 (* ---- World drawing ---- *)
 
-PROCEDURE DrawWorldTiled;
-VAR imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
+PROCEDURE DrawTilesPass(overlayPass: BOOLEAN);
+VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
+    isOverlay: BOOLEAN;
+    tex: ADDRESS;
 BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
@@ -56,23 +58,40 @@ BEGIN
   FOR imy := startIY TO endIY DO
     FOR imx := startIX TO endIX DO
       secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
-      (* Bank selects which PNG, lower 6 bits index the tile within it.
-         Each PNG only has 64 valid tiles at positions 0-63. *)
       imgIdx := secByte DIV 64;
       tileY := (secByte MOD 64) * TilePixH;
 
-      sx := imx * TilePixW - camX;
-      sy := imy * TilePixH - camY;
+      maskType := GetMaskType(secByte);
+      isOverlay := maskType >= 1;
 
-      IF (imgIdx >= 0) AND (imgIdx <= 3) AND (tileTex[imgIdx] # NIL) THEN
-        DrawTexRegion(tileTex[imgIdx],
-                      0, tileY, TilePixW, TilePixH,
-                      S(sx), S(sy), S(TilePixW), S(TilePixH))
+      IF overlayPass = isOverlay THEN
+        sx := imx * TilePixW - camX;
+        sy := imy * TilePixH - camY;
+
+        IF (imgIdx >= 0) AND (imgIdx <= 3) THEN
+          (* Overlay pass uses keyed textures (black = transparent).
+             Ground pass uses normal textures. *)
+          IF overlayPass THEN
+            tex := tileOverlay[imgIdx]
+          ELSE
+            tex := tileTex[imgIdx]
+          END;
+          IF tex # NIL THEN
+            DrawTexRegion(tex,
+                          0, tileY, TilePixW, TilePixH,
+                          S(sx), S(sy), S(TilePixW), S(TilePixH))
+          END
+        END
       END
     END
   END;
 
   ClearClip(ren)
+END DrawTilesPass;
+
+PROCEDURE DrawWorldTiled;
+BEGIN
+  DrawTilesPass(FALSE)  (* ground pass only *)
 END DrawWorldTiled;
 
 PROCEDURE DrawWorldFallback;
@@ -131,6 +150,12 @@ BEGIN
     DrawWorldFallback
   END
 END DrawWorld;
+
+PROCEDURE DrawOverlay;
+BEGIN
+  (* TODO: proper masking via m2blitter library.
+     For now, overlay pass is disabled — character draws on top of tiles. *)
+END DrawOverlay;
 
 (* ---- Items ---- *)
 
@@ -312,6 +337,42 @@ BEGIN
     FillRect(ren, 0, S(PlayH), S(ScreenW), S(TextH))
   END
 END DrawHUD;
+
+PROCEDURE DrawCompass;
+CONST
+  (* Compass center in screen pixels.
+     HUD compass is at ~(591, 27) in 640x57 space.
+     Screen: 591*960/640=886, PlayH*3 + 27*171/57=429+81=510 *)
+  CX = 886;
+  CY = 510;
+  R  = 16;  (* radius to direction pip *)
+VAR dir, px, py: INTEGER;
+BEGIN
+  IF actors[0].state = StStill THEN RETURN END;
+  dir := actors[0].facing;
+  IF (dir < 0) OR (dir > 7) THEN RETURN END;
+
+  (* Calculate pip position from compass center.
+     Our dirs: N=0,NE=1,E=2,SE=3,S=4,SW=5,W=6,NW=7 *)
+  CASE dir OF
+    0: px := CX;     py := CY - R |     (* N *)
+    1: px := CX + R + 13; py := CY - R - 14 |  (* NE *)
+    2: px := CX + R;      py := CY |           (* E *)
+    3: px := CX + R + 13; py := CY + R + 13 |  (* SE *)
+    4: px := CX;           py := CY + R |       (* S *)
+    5: px := CX - R - 15; py := CY + R + 15 |  (* SW *)
+    6: px := CX - R;      py := CY |           (* W *)
+    7: px := CX - R - 14; py := CY - R - 14    (* NW *)
+  ELSE
+    RETURN
+  END;
+
+  (* Draw a bright red diamond pip *)
+  SetColor(ren, 255, 50, 0, 255);
+  FillRect(ren, px - 3, py - 3, 7, 7);
+  SetColor(ren, 255, 200, 50, 255);
+  FillRect(ren, px - 1, py - 1, 3, 3)
+END DrawCompass;
 
 (* ---- Menu ---- *)
 
