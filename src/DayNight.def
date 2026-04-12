@@ -1,0 +1,18 @@
+DEFINITION MODULE DayNight;
+
+(* Pure Modula-2 day/night cycle.
+   Original uses daynight counter to fade palette RGB. *)
+
+CONST
+  DayLength = 7200;  (* ~2 minutes at 60fps = one full cycle *)
+
+VAR
+  timeOfDay: INTEGER;  (* 0..DayLength-1 *)
+  brightness: INTEGER; (* 0..100 *)
+  isNight: BOOLEAN;
+
+PROCEDURE InitDayNight;
+PROCEDURE UpdateDayNight;
+PROCEDURE GetTint(VAR r, g, b: INTEGER);
+
+END DayNight.

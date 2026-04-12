@@ -1,0 +1,48 @@
+DEFINITION MODULE Assets;
+
+(* Asset loading for original game data.
+   Binary parsing is pure M2. BMP textures loaded via Platform. *)
+
+FROM SYSTEM IMPORT ADDRESS;
+
+CONST
+  NumRegions  = 10;
+  SectorSize  = 32768;
+  MapSize     = 4096;
+  TerrainSize = 512;
+  TileW       = 16;
+  TileH       = 32;
+
+TYPE
+  RegionDef = RECORD
+    image:   ARRAY [0..3] OF INTEGER;
+    terra1:  INTEGER;
+    terra2:  INTEGER;
+    sector:  INTEGER;
+    region:  INTEGER;
+    name:    ARRAY [0..31] OF CHAR
+  END;
+
+VAR
+  regions: ARRAY [0..9] OF RegionDef;
+  sectorMem: ARRAY [0..32767] OF CHAR;
+  mapMem:    ARRAY [0..4095] OF CHAR;
+  terraMem:  ARRAY [0..1023] OF CHAR;
+  currentRegion: INTEGER;
+  tileTex: ARRAY [0..3] OF ADDRESS;
+  hudTex:  ADDRESS;
+  brotherTex: ARRAY [0..2] OF ADDRESS;  (* Julian=0, Phillip=1, Kevin=2 *)
+  xReg, yReg: INTEGER;
+
+PROCEDURE InitAssets;
+PROCEDURE PreloadAll(): BOOLEAN;
+PROCEDURE LoadHUD(targetW, targetH: INTEGER): BOOLEAN;
+PROCEDURE SwitchRegion(regionIdx: INTEGER);
+PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
+PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
+PROCEDURE IsBlocked(x, y: INTEGER): BOOLEAN;
+PROCEDURE TerrainSpeedAt(x, y: INTEGER): INTEGER;
+PROCEDURE DetectRegion(px, py: INTEGER): INTEGER;
+PROCEDURE CheckRegionSwitch(px, py: INTEGER);
+
+END Assets.

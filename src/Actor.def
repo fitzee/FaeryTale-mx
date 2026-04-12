@@ -1,0 +1,61 @@
+DEFINITION MODULE Actor;
+
+(* Pure Modula-2 actor/entity types matching original game structures *)
+
+CONST
+  MaxActors = 20;
+
+  (* Motion states *)
+  StWalking  = 12;
+  StStill    = 13;
+  StFighting = 0;
+  StDying    = 14;
+  StDead     = 15;
+  StSink     = 16;
+  StFrozen   = 20;
+  StFlying   = 21;
+  StFall     = 22;
+  StShoot1   = 24;
+  StShoot3   = 25;
+
+  (* Actor types *)
+  TypePlayer  = 0;
+  TypeEnemy   = 1;
+  TypeObject  = 2;
+
+  (* Goal modes *)
+  GoalUser    = 0;
+  GoalAttack1 = 1;
+  GoalAttack2 = 2;
+  GoalFlee    = 5;
+  GoalStand   = 6;
+  GoalDeath   = 7;
+  GoalWait    = 8;
+  GoalFollow  = 9;
+
+TYPE
+  Actor = RECORD
+    absX, absY: INTEGER;
+    relX, relY: INTEGER;
+    actorType:  INTEGER;
+    race:       INTEGER;
+    index:      INTEGER;
+    visible:    BOOLEAN;
+    weapon:     INTEGER;
+    environ:    INTEGER;
+    goal:       INTEGER;
+    tactic:     INTEGER;
+    state:      INTEGER;
+    facing:     INTEGER;
+    vitality:   INTEGER;
+    velX, velY: INTEGER
+  END;
+
+VAR
+  actors: ARRAY [0..19] OF Actor;
+  actorCount: INTEGER;
+
+PROCEDURE InitActor(VAR a: Actor);
+PROCEDURE InitAll;
+
+END Actor.

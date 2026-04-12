@@ -1,0 +1,33 @@
+DEFINITION MODULE Brothers;
+
+(* Pure Modula-2 three-brothers system.
+   In the original, when one brother dies the next takes over.
+   Each has different starting stats. *)
+
+CONST
+  Julian = 0;
+  Philip = 1;
+  Kevin  = 2;
+  NumBrothers = 3;
+
+TYPE
+  BrotherData = RECORD
+    name:     ARRAY [0..15] OF CHAR;
+    vitality: INTEGER;
+    weapon:   INTEGER;
+    startX:   INTEGER;
+    startY:   INTEGER;
+    alive:    BOOLEAN
+  END;
+
+VAR
+  brothers: ARRAY [0..2] OF BrotherData;
+  activeBrother: INTEGER;
+
+PROCEDURE InitBrothers;
+PROCEDURE SwitchToNext(): BOOLEAN;
+PROCEDURE ActiveName(VAR name: ARRAY OF CHAR);
+PROCEDURE SaveBrotherState;
+PROCEDURE RestoreBrotherState;
+
+END Brothers.

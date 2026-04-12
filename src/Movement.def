@@ -1,0 +1,11 @@
+DEFINITION MODULE Movement;
+
+(* Pure Modula-2 movement and collision.
+   Reimplements newx/newy direction tables and proxcheck logic. *)
+
+PROCEDURE NewX(x, dir, speed: INTEGER): INTEGER;
+PROCEDURE NewY(y, dir, speed: INTEGER): INTEGER;
+PROCEDURE ProxCheck(x, y, actorIdx: INTEGER): INTEGER;
+PROCEDURE MoveActor(actorIdx, dir, speed: INTEGER): BOOLEAN;
+
+END Movement.

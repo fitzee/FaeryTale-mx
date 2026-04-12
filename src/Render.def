@@ -1,0 +1,12 @@
+DEFINITION MODULE Render;
+
+PROCEDURE DrawWorld;
+PROCEDURE DrawItems;
+PROCEDURE DrawActors;
+PROCEDURE DrawHUD;
+PROCEDURE DrawMenu;
+PROCEDURE DrawMinimap;
+PROCEDURE DrawRegionFade;
+PROCEDURE DrawMessage;
+
+END Render.

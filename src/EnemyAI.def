@@ -1,0 +1,9 @@
+DEFINITION MODULE EnemyAI;
+
+(* Pure Modula-2 enemy AI.
+   Implements goal/tactic system from original. *)
+
+PROCEDURE UpdateEnemies;
+PROCEDURE SetCourse(actorIdx, targetX, targetY: INTEGER);
+
+END EnemyAI.

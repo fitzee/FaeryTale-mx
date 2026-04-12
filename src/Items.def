@@ -1,0 +1,40 @@
+DEFINITION MODULE Items;
+
+(* Pure Modula-2 item/object system.
+   Matches original ob_list structure. *)
+
+CONST
+  MaxItems   = 64;
+  MaxInv     = 16;
+
+  (* Item IDs *)
+  ItemNone    = 0;
+  ItemGold    = 1;
+  ItemFood    = 2;
+  ItemKey     = 3;
+  ItemSword   = 4;
+  ItemShield  = 5;
+  ItemPotion  = 6;
+  ItemGem     = 7;
+  ItemScroll  = 8;
+
+TYPE
+  WorldItem = RECORD
+    x, y:   INTEGER;
+    itemId:  INTEGER;
+    active: BOOLEAN
+  END;
+
+VAR
+  items: ARRAY [0..63] OF WorldItem;
+  itemCount: INTEGER;
+  inventory: ARRAY [0..15] OF INTEGER;  (* counts per item type *)
+
+PROCEDURE InitItems;
+PROCEDURE SpawnItem(wx, wy, id: INTEGER);
+PROCEDURE CheckPickup(playerX, playerY: INTEGER): INTEGER;
+PROCEDURE AddToInventory(id: INTEGER);
+PROCEDURE UseItem(id: INTEGER): BOOLEAN;
+PROCEDURE InventoryCount(id: INTEGER): INTEGER;
+
+END Items.

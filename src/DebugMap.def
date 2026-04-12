@@ -1,0 +1,11 @@
+DEFINITION MODULE DebugMap;
+
+(* Debug minimap: shows the entire loaded region's map data
+   in a separate SDL window. Toggle with M key. *)
+
+PROCEDURE InitDebugMap;
+PROCEDURE ToggleDebugMap;
+PROCEDURE UpdateDebugMap;
+PROCEDURE IsOpen(): BOOLEAN;
+
+END DebugMap.

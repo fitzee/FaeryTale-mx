@@ -1,0 +1,373 @@
+IMPLEMENTATION MODULE Assets;
+
+FROM SYSTEM IMPORT ADDRESS, ADR;
+FROM Strings IMPORT Assign, Concat;
+FROM Sys IMPORT m2sys_fopen, m2sys_fclose, m2sys_fread_bytes,
+               m2sys_file_exists;
+FROM InOut IMPORT WriteString, WriteInt, WriteLn;
+FROM Platform IMPORT LoadBMPTexture, LoadBMPScaled, LoadBMPKeyedTexture;
+
+CONST
+  MaxImgs = 20;
+
+VAR
+  pathBuf: ARRAY [0..127] OF CHAR;
+  numBuf: ARRAY [0..15] OF CHAR;
+  modeBuf: ARRAY [0..3] OF CHAR;
+  basePath: ARRAY [0..63] OF CHAR;
+
+  (* All preloaded sector/map data *)
+  sect032: ARRAY [0..32767] OF CHAR;
+  sect096: ARRAY [0..32767] OF CHAR;
+  map160, map168, map176, map184, map192: ARRAY [0..4095] OF CHAR;
+  allTerr: ARRAY [0..10] OF ARRAY [0..511] OF CHAR;
+
+  (* Texture cache *)
+  cachedNum: ARRAY [0..19] OF INTEGER;
+  cachedTex: ARRAY [0..19] OF ADDRESS;
+  cachedCount: INTEGER;
+
+  (* Active pointers set by SwitchRegion — point into preloaded data *)
+  activeSect: INTEGER;  (* 0 = sect032, 1 = sect096 *)
+  activeMap: INTEGER;   (* 0..4 = which map file *)
+
+PROCEDURE IntToStr3(val: INTEGER; VAR out: ARRAY OF CHAR);
+BEGIN
+  out[0] := CHR(ORD('0') + val DIV 100);
+  out[1] := CHR(ORD('0') + (val MOD 100) DIV 10);
+  out[2] := CHR(ORD('0') + val MOD 10);
+  out[3] := 0C
+END IntToStr3;
+
+PROCEDURE IntToStr2(val: INTEGER; VAR out: ARRAY OF CHAR);
+BEGIN
+  out[0] := CHR(ORD('0') + val DIV 10);
+  out[1] := CHR(ORD('0') + val MOD 10);
+  out[2] := 0C
+END IntToStr2;
+
+PROCEDURE InitRegionTable;
+BEGIN
+  regions[0].image[0]:=320; regions[0].image[1]:=480; regions[0].image[2]:=520; regions[0].image[3]:=560;
+  regions[0].terra1:=0; regions[0].terra2:=1; regions[0].sector:=32; regions[0].region:=160;
+  Assign("Snowy Region", regions[0].name);
+  regions[1].image[0]:=320; regions[1].image[1]:=360; regions[1].image[2]:=400; regions[1].image[3]:=440;
+  regions[1].terra1:=2; regions[1].terra2:=3; regions[1].sector:=32; regions[1].region:=160;
+  Assign("Witch Woods", regions[1].name);
+  regions[2].image[0]:=320; regions[2].image[1]:=360; regions[2].image[2]:=520; regions[2].image[3]:=560;
+  regions[2].terra1:=2; regions[2].terra2:=1; regions[2].sector:=32; regions[2].region:=168;
+  Assign("Swamp Region", regions[2].name);
+  regions[3].image[0]:=320; regions[3].image[1]:=360; regions[3].image[2]:=400; regions[3].image[3]:=440;
+  regions[3].terra1:=2; regions[3].terra2:=3; regions[3].sector:=32; regions[3].region:=168;
+  Assign("Plains Rocks", regions[3].name);
+  regions[4].image[0]:=320; regions[4].image[1]:=480; regions[4].image[2]:=520; regions[4].image[3]:=600;
+  regions[4].terra1:=0; regions[4].terra2:=4; regions[4].sector:=32; regions[4].region:=176;
+  Assign("Desert Area", regions[4].name);
+  regions[5].image[0]:=320; regions[5].image[1]:=280; regions[5].image[2]:=240; regions[5].image[3]:=200;
+  regions[5].terra1:=5; regions[5].terra2:=6; regions[5].sector:=32; regions[5].region:=176;
+  Assign("Bay City Farms", regions[5].name);
+  regions[6].image[0]:=320; regions[6].image[1]:=640; regions[6].image[2]:=520; regions[6].image[3]:=600;
+  regions[6].terra1:=7; regions[6].terra2:=4; regions[6].sector:=32; regions[6].region:=184;
+  Assign("Volcanic", regions[6].name);
+  regions[7].image[0]:=320; regions[7].image[1]:=280; regions[7].image[2]:=240; regions[7].image[3]:=200;
+  regions[7].terra1:=5; regions[7].terra2:=6; regions[7].sector:=32; regions[7].region:=184;
+  Assign("Forest Wilderness", regions[7].name);
+  regions[8].image[0]:=680; regions[8].image[1]:=720; regions[8].image[2]:=800; regions[8].image[3]:=840;
+  regions[8].terra1:=8; regions[8].terra2:=9; regions[8].sector:=96; regions[8].region:=192;
+  Assign("Inside Buildings", regions[8].name);
+  regions[9].image[0]:=680; regions[9].image[1]:=760; regions[9].image[2]:=800; regions[9].image[3]:=840;
+  regions[9].terra1:=10; regions[9].terra2:=9; regions[9].sector:=96; regions[9].region:=192;
+  Assign("Dungeons Caves", regions[9].name)
+END InitRegionTable;
+
+PROCEDURE InitAssets;
+VAR i: INTEGER;
+BEGIN
+  currentRegion := -1;
+  hudTex := NIL;
+  xReg := 0; yReg := 0;
+  activeSect := 0; activeMap := 0;
+  cachedCount := 0;
+  InitRegionTable;
+  Assign("rb", modeBuf);
+  FOR i := 0 TO 3 DO tileTex[i] := NIL END;
+  FOR i := 0 TO 2 DO brotherTex[i] := NIL END;
+  IF m2sys_file_exists(ADR("assets/hiscreen.bmp")) = 1 THEN
+    Assign("assets/", basePath)
+  ELSIF m2sys_file_exists(ADR("../../assets/hiscreen.bmp")) = 1 THEN
+    Assign("../../assets/", basePath)
+  ELSE
+    Assign("assets/", basePath)
+  END
+END InitAssets;
+
+PROCEDURE MakePath(prefix: ARRAY OF CHAR; num, digits: INTEGER;
+                   ext: ARRAY OF CHAR);
+BEGIN
+  Assign(basePath, pathBuf);
+  Concat(pathBuf, prefix, pathBuf);
+  IF digits = 3 THEN IntToStr3(num, numBuf)
+  ELSE IntToStr2(num, numBuf)
+  END;
+  Concat(pathBuf, numBuf, pathBuf);
+  Concat(pathBuf, ext, pathBuf)
+END MakePath;
+
+PROCEDURE LoadBin(path: ARRAY OF CHAR; buf: ADDRESS; size: INTEGER): BOOLEAN;
+VAR fd, n: INTEGER;
+BEGIN
+  fd := m2sys_fopen(ADR(path), ADR(modeBuf));
+  IF fd < 0 THEN
+    WriteString("  FAILED: "); WriteString(path); WriteLn;
+    RETURN FALSE
+  END;
+  n := m2sys_fread_bytes(fd, buf, size);
+  m2sys_fclose(fd);
+  RETURN n >= size
+END LoadBin;
+
+PROCEDURE LoadImgCached(num: INTEGER): ADDRESS;
+VAR i: INTEGER;
+    tex: ADDRESS;
+BEGIN
+  FOR i := 0 TO cachedCount - 1 DO
+    IF cachedNum[i] = num THEN RETURN cachedTex[i] END
+  END;
+  MakePath("image_", num, 3, ".bmp");
+  WriteString("  "); WriteString(pathBuf); WriteLn;
+  tex := LoadBMPTexture(pathBuf);
+  IF (tex # NIL) AND (cachedCount < MaxImgs) THEN
+    cachedNum[cachedCount] := num;
+    cachedTex[cachedCount] := tex;
+    INC(cachedCount)
+  END;
+  RETURN tex
+END LoadImgCached;
+
+PROCEDURE PreloadAll(): BOOLEAN;
+VAR i, j: INTEGER;
+BEGIN
+  WriteString("Preloading all game assets..."); WriteLn;
+
+  MakePath("sector_", 32, 3, ".bin");
+  WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(sect032), SectorSize) THEN RETURN FALSE END;
+  MakePath("sector_", 96, 3, ".bin");
+  WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(sect096), SectorSize) THEN RETURN FALSE END;
+
+  MakePath("map_", 160, 3, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(map160), MapSize) THEN RETURN FALSE END;
+  MakePath("map_", 168, 3, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(map168), MapSize) THEN RETURN FALSE END;
+  MakePath("map_", 176, 3, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(map176), MapSize) THEN RETURN FALSE END;
+  MakePath("map_", 184, 3, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(map184), MapSize) THEN RETURN FALSE END;
+  MakePath("map_", 192, 3, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+  IF NOT LoadBin(pathBuf, ADR(map192), MapSize) THEN RETURN FALSE END;
+
+  FOR i := 0 TO 10 DO
+    MakePath("terrain_", i, 2, ".bin"); WriteString("  "); WriteString(pathBuf); WriteLn;
+    IF NOT LoadBin(pathBuf, ADR(allTerr[i]), TerrainSize) THEN RETURN FALSE END
+  END;
+
+  (* Preload ALL image textures across all regions *)
+  FOR i := 0 TO NumRegions - 1 DO
+    FOR j := 0 TO 3 DO
+      IF LoadImgCached(regions[i].image[j]) = NIL THEN RETURN FALSE END
+    END
+  END;
+
+  (* Load brother sprite sheets with magenta color key *)
+  brotherTex[0] := LoadBMPKeyedTexture("assets/julian.bmp", 255, 0, 255);
+  brotherTex[1] := LoadBMPKeyedTexture("assets/phillip.bmp", 255, 0, 255);
+  brotherTex[2] := LoadBMPKeyedTexture("assets/kevin.bmp", 255, 0, 255);
+  IF brotherTex[0] = NIL THEN
+    WriteString("*** Brother sprites failed ***"); WriteLn
+  ELSE
+    WriteString("Brother sprites loaded"); WriteLn
+  END;
+
+  WriteString("Done: "); WriteInt(cachedCount, 1);
+  WriteString(" textures cached"); WriteLn;
+  RETURN TRUE
+END PreloadAll;
+
+(* Instant region switch — zero disk I/O *)
+PROCEDURE SwitchRegion(regionIdx: INTEGER);
+VAR i: INTEGER;
+BEGIN
+  IF (regionIdx < 0) OR (regionIdx >= NumRegions) THEN RETURN END;
+  IF regionIdx = currentRegion THEN RETURN END;
+
+  (* Select active sector buffer *)
+  IF regions[regionIdx].sector = 96 THEN activeSect := 1
+  ELSE activeSect := 0
+  END;
+
+  (* Select active map buffer *)
+  CASE regions[regionIdx].region OF
+    160: activeMap := 0 |
+    168: activeMap := 1 |
+    176: activeMap := 2 |
+    184: activeMap := 3 |
+    192: activeMap := 4
+  ELSE
+    activeMap := 0
+  END;
+
+  (* Copy terrain into working buffer (1KB, trivial) *)
+  FOR i := 0 TO TerrainSize - 1 DO
+    terraMem[i] := allTerr[regions[regionIdx].terra1][i];
+    terraMem[512 + i] := allTerr[regions[regionIdx].terra2][i]
+  END;
+
+  (* Point tileTex to cached textures — instant *)
+  FOR i := 0 TO 3 DO
+    tileTex[i] := LoadImgCached(regions[regionIdx].image[i])
+  END;
+
+  currentRegion := regionIdx;
+  IF regionIdx < 8 THEN
+    xReg := (regionIdx MOD 2) * 64;
+    yReg := (regionIdx DIV 2) * 32
+  ELSE
+    xReg := 0;
+    yReg := (regionIdx DIV 2) * 32
+  END;
+
+  (* Copy active data into exported arrays so DebugMap can read them *)
+  IF activeSect = 1 THEN
+    sectorMem := sect096
+  ELSE
+    sectorMem := sect032
+  END;
+  CASE activeMap OF
+    0: mapMem := map160 |
+    1: mapMem := map168 |
+    2: mapMem := map176 |
+    3: mapMem := map184 |
+    4: mapMem := map192
+  ELSE
+  END
+END SwitchRegion;
+
+PROCEDURE LoadHUD(targetW, targetH: INTEGER): BOOLEAN;
+BEGIN
+  Assign(basePath, pathBuf);
+  Concat(pathBuf, "hiscreen.bmp", pathBuf);
+  (* Pre-render the BMP into an RGBA texture at the target size.
+     This avoids SDL issues with source rects on paletted textures. *)
+  hudTex := LoadBMPScaled(pathBuf, targetW, targetH);
+  RETURN hudTex # NIL
+END LoadHUD;
+
+PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
+VAR imx, imy, secx, secy, secNum, offset: INTEGER;
+BEGIN
+  imx := x DIV TileW;
+  imy := y DIV TileH;
+  secx := (imx DIV 16) MOD 128;
+  secy := (imy DIV 8) MOD 32;
+  offset := secy * 128 + secx;
+  IF (offset < 0) OR (offset >= MapSize) THEN RETURN 0 END;
+  (* Read from active map buffer *)
+  CASE activeMap OF
+    0: secNum := ORD(map160[offset]) |
+    1: secNum := ORD(map168[offset]) |
+    2: secNum := ORD(map176[offset]) |
+    3: secNum := ORD(map184[offset]) |
+    4: secNum := ORD(map192[offset])
+  ELSE
+    secNum := 0
+  END;
+  offset := secNum * 128 + (imy MOD 8) * 16 + (imx MOD 16);
+  IF (offset < 0) OR (offset >= SectorSize) THEN RETURN 0 END;
+  (* Read from active sector buffer *)
+  IF activeSect = 1 THEN
+    RETURN ORD(sect096[offset])
+  ELSE
+    RETURN ORD(sect032[offset])
+  END
+END GetSectorByte;
+
+PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
+VAR secByte, cm, tilesMask, subBit: INTEGER;
+BEGIN
+  secByte := GetSectorByte(x, y);
+  cm := secByte * 4;
+  IF (cm + 2 < 0) OR (cm + 2 >= 1024) THEN RETURN 0 END;
+
+  (* Sub-tile bitmask: 2 columns x 4 rows = 8 sub-regions per tile.
+     Matches original px_to_im logic in fsubs.asm. *)
+  subBit := 128;  (* start at bit 7 = top-left *)
+  IF (x MOD 16) >= 8 THEN  (* right half *)
+    subBit := subBit DIV 16
+  END;
+  IF (y MOD 32) >= 16 THEN  (* bottom half *)
+    subBit := subBit DIV 4
+  END;
+  IF ((y MOD 32) MOD 16) >= 8 THEN  (* lower quarter *)
+    subBit := subBit DIV 2
+  END;
+
+  (* Check tiles bitmask (byte 2) against sub-region bit.
+     If the bit is not set, this sub-region is passable. *)
+  tilesMask := ORD(terraMem[cm + 2]);
+  IF (tilesMask DIV subBit) MOD 2 = 0 THEN
+    RETURN 0  (* sub-region is passable *)
+  END;
+
+  (* High nibble of byte 1 = terrain category *)
+  RETURN (ORD(terraMem[cm + 1]) DIV 16) MOD 16
+END GetTerrainAt;
+
+PROCEDURE IsBlocked(x, y: INTEGER): BOOLEAN;
+VAR t: INTEGER;
+BEGIN
+  t := GetTerrainAt(x, y);
+  (* Original prox: terrain 1 = blocked, terrain >= 10 = blocked.
+     Player ignores 8,9 (swamp/palace). *)
+  RETURN (t = 1) OR (t >= 10)
+END IsBlocked;
+
+PROCEDURE TerrainSpeedAt(x, y: INTEGER): INTEGER;
+VAR t: INTEGER;
+BEGIN
+  t := GetTerrainAt(x, y);
+  (* Original speeds: normal=2, slow=1, fast=4, blocked=0 *)
+  CASE t OF
+    0:  RETURN 2 |  (* grass: normal *)
+    1:  RETURN 0 |  (* wall: blocked *)
+    2:  RETURN 4 |  (* road: fast *)
+    3:  RETURN 2 |  (* shore: normal *)
+    4:  RETURN 2 |  (* misc: normal *)
+    5:  RETURN 1 |  (* water: slow *)
+    10: RETURN 1 |  (* rough edge: slow *)
+    15: RETURN 1    (* forest: slow *)
+  ELSE
+    RETURN 2
+  END
+END TerrainSpeedAt;
+
+PROCEDURE DetectRegion(px, py: INTEGER): INTEGER;
+VAR xs, ys, xr, yr: INTEGER;
+BEGIN
+  xs := (px + 151) DIV 256;
+  ys := (py + 64) DIV 256;
+  xr := (xs DIV 64) MOD 2;
+  yr := (ys DIV 32) MOD 4;
+  RETURN xr + yr * 2
+END DetectRegion;
+
+PROCEDURE CheckRegionSwitch(px, py: INTEGER);
+VAR newReg: INTEGER;
+BEGIN
+  newReg := DetectRegion(px, py);
+  IF (newReg # currentRegion) AND (newReg >= 0) AND (newReg < 8) THEN
+    SwitchRegion(newReg)
+  END
+END CheckRegionSwitch;
+
+END Assets.

@@ -1,0 +1,58 @@
+DEFINITION MODULE Platform;
+
+(* Thin SDL2 boundary layer via m2gfx.
+   All SDL2 interaction is confined to this module. *)
+
+FROM SYSTEM IMPORT ADDRESS;
+FROM Gfx IMPORT Window, Renderer;
+
+CONST
+  ScreenW = 320;
+  ScreenH = 200;
+  PlayW   = 320;
+  PlayH   = 143;
+  TextH   = 57;
+  Scale   = 3;
+
+  DirN  = 0;  DirNE = 1;  DirE  = 2;  DirSE = 3;
+  DirS  = 4;  DirSW = 5;  DirW  = 6;  DirNW = 7;
+  DirNone = 8;
+
+TYPE
+  InputState = RECORD
+    dirKey:    INTEGER;
+    attack:    BOOLEAN;
+    quit:      BOOLEAN;
+    usePotion: BOOLEAN;
+    useFood:   BOOLEAN;
+    talk:      BOOLEAN;
+    toggleMap: BOOLEAN;
+    menuKey:   CHAR     (* letter key pressed this frame, or 0C *)
+  END;
+
+VAR
+  win: Window;
+  ren: Renderer;
+
+PROCEDURE Init(): BOOLEAN;
+PROCEDURE Shutdown;
+PROCEDURE PollInput(VAR inp: InputState);
+PROCEDURE BeginFrame;
+PROCEDURE EndFrame;
+PROCEDURE GetTicks(): INTEGER;
+PROCEDURE DelayMs(ms: INTEGER);
+
+(* Asset loading: BMP to SDL texture *)
+PROCEDURE LoadBMPTexture(path: ARRAY OF CHAR): ADDRESS;
+PROCEDURE LoadBMPKeyedTexture(path: ARRAY OF CHAR;
+                               kr, kg, kb: INTEGER): ADDRESS;
+
+(* Load BMP and scale to target size *)
+PROCEDURE LoadBMPScaled(path: ARRAY OF CHAR; dw, dh: INTEGER): ADDRESS;
+
+(* Texture drawing *)
+PROCEDURE DrawTexRegion(tex: ADDRESS;
+                        sx, sy, sw, sh: INTEGER;
+                        dx, dy, dw, dh: INTEGER);
+
+END Platform.

@@ -1,0 +1,24 @@
+DEFINITION MODULE NPC;
+
+(* Pure Modula-2 NPC system.
+   NPCs are non-hostile actors that can speak when approached. *)
+
+CONST
+  MaxNPCs = 8;
+
+TYPE
+  NPCData = RECORD
+    actorIdx: INTEGER;
+    speechIdx: INTEGER;
+    hasSpoken: BOOLEAN
+  END;
+
+VAR
+  npcs: ARRAY [0..7] OF NPCData;
+  npcCount: INTEGER;
+
+PROCEDURE InitNPCs;
+PROCEDURE CheckNPCInteract(playerX, playerY: INTEGER): INTEGER;
+PROCEDURE GetSpeech(speechIdx: INTEGER; VAR text: ARRAY OF CHAR);
+
+END NPC.

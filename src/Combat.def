@@ -1,0 +1,9 @@
+DEFINITION MODULE Combat;
+
+(* Pure Modula-2 combat system.
+   Handles hit detection and damage between actors. *)
+
+PROCEDURE UpdateCombat;
+PROCEDURE DoHit(attacker, defender: INTEGER);
+
+END Combat.

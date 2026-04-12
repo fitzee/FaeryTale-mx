@@ -1,0 +1,9 @@
+name=faerytale
+version=0.1.0
+edition=m2plus
+entry=src/Main.mod
+includes=src
+
+[deps]
+m2gfx
+m2sys

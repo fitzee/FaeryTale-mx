@@ -1,0 +1,24 @@
+DEFINITION MODULE GameState;
+
+(* Pure Modula-2 game state management *)
+
+CONST
+  FrameTime = 16;  (* ~60fps in ms *)
+  MsgLen    = 64;
+
+VAR
+  running: BOOLEAN;
+  cycle: INTEGER;
+  dayNight: INTEGER;
+  msgText: ARRAY [0..63] OF CHAR;
+  msgTimer: INTEGER;
+
+VAR
+  mapToggled: BOOLEAN;
+  regionFade: INTEGER;  (* >0 = fading during region switch *)
+
+PROCEDURE InitGame;
+PROCEDURE UpdateGame;
+PROCEDURE ShowMessage(msg: ARRAY OF CHAR);
+
+END GameState.

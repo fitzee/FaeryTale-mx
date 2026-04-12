@@ -1,0 +1,42 @@
+DEFINITION MODULE World;
+
+(* Pure Modula-2 world/map representation.
+   Larger scrolling world with multiple areas. *)
+
+CONST
+  TileSize  = 16;
+  WorldW    = 64;   (* tiles wide *)
+  WorldH    = 64;   (* tiles tall *)
+  MaxCoord  = 32768;
+  CoordMask = 32767;
+
+  (* Terrain types *)
+  TerrGrass    = 0;
+  TerrWater    = 1;
+  TerrForest   = 2;
+  TerrMountain = 3;
+  TerrPath     = 4;
+  TerrWall     = 5;
+  TerrDoor     = 6;
+  TerrSand     = 7;
+  TerrSwamp    = 8;
+  TerrBridge   = 9;
+  TerrFloor    = 10;
+
+TYPE
+  Tile = RECORD
+    terrain: INTEGER
+  END;
+
+VAR
+  tiles: ARRAY [0..63] OF ARRAY [0..63] OF Tile;
+  camX, camY: INTEGER;
+
+PROCEDURE InitWorld;
+PROCEDURE IsPassable(terrain: INTEGER): BOOLEAN;
+PROCEDURE GetTerrain(x, y: INTEGER): INTEGER;
+PROCEDURE TerrainSpeed(terrain: INTEGER): INTEGER;
+PROCEDURE WorldToTile(wx: INTEGER): INTEGER;
+PROCEDURE UpdateCamera(playerX, playerY: INTEGER);
+
+END World.
