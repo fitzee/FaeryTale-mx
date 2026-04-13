@@ -191,7 +191,8 @@ PROCEDURE DrawOverlay;
 VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
     pb: PBuf;
-    maskY: INTEGER;
+    maskY, ystop: INTEGER;
+    doMask: BOOLEAN;
 BEGIN
   IF currentRegion < 0 THEN RETURN END;
   IF (overlayPB = NIL) OR (overlayTex = NIL) THEN RETURN END;
@@ -221,47 +222,46 @@ BEGIN
         sy := imy * TilePixH - camY;
         maskY := GetMapTag(secByte) * TilePixH;
 
-        (* Apply mask type rules from original fmain.c:3599-3630:
-           0 = never overlay (already filtered above)
-           1 = overlay only when character is RIGHT of tile
-           2 = overlay only when character is ABOVE (north of) tile
-           3 = always overlay
-           4 = overlay when right AND above
-           5 = overlay when right OR above
-           6 = always if character is above tile row
-           7 = overlay when above, close range *)
-        (* Mask type filtering matching original fmain.c:3599-3630.
-           Type 1: skip when character is RIGHT of tile (xm==0 skip)
-           Type 2: skip when character feet below tile bottom
-           Type 3: always overlay
-           Type 4: skip when right OR below
-           Type 5: skip when right AND below *)
-        IF (maskType = 1) AND
-           (actors[0].absX >= (imx + 1) * TilePixW) THEN
-          (* type 1: skip when character is fully RIGHT of tile *)
-        ELSIF (maskType = 2) AND
-              (actors[0].absY >= (imy + 1) * TilePixH) THEN
-          (* type 2: skip when character feet BELOW tile bottom *)
-        ELSIF (maskType = 4) AND
-              ((actors[0].absX >= (imx + 1) * TilePixW) OR
-               (actors[0].absY >= (imy + 1) * TilePixH)) THEN
-          (* type 4: skip if either fails *)
-        ELSIF (maskType = 5) AND
-              ((actors[0].absX >= (imx + 1) * TilePixW) AND
-               (actors[0].absY >= (imy + 1) * TilePixH)) THEN
-          (* type 5: skip only if both fail *)
-        ELSIF (sx + TilePixW > 0) AND (sx < PlayW) AND
+        (* Matching original fmain.c:3588-3631 exactly.
+           ystop = ground - tile_row_Y (how far below tile the feet are)
+           xm approximation: is character left or right of tile center *)
+        IF (sx + TilePixW > 0) AND (sx < PlayW) AND
            (sy + TilePixH > 0) AND (sy < PlayH) AND
            (imgIdx >= 0) AND (imgIdx <= 3) AND
            (maskY + TilePixH <= 6144) THEN
-          pb := tilePB[imgIdx];
-          IF pb # NIL THEN
-            (* Use RGBA blit to avoid palette mismatch.
-               Reads RGB from source's palette, writes RGBA directly. *)
-            ShadowBlitRGBA(pb, shadowPB,
-                           0, tileY, 0, maskY,
-                           overlayPB,
-                           sx, sy, TilePixW, TilePixH)
+          ystop := (actors[0].absY - camY) - sy;
+          doMask := TRUE;
+          CASE maskType OF
+            0: doMask := FALSE |
+            1: IF actors[0].absX >= (imx + 1) * TilePixW THEN
+                 doMask := FALSE
+               END |
+            2: IF ystop > 35 THEN doMask := FALSE END |
+            3: (* always — except bridge: original checks hero_sector==48 *)
+               IF GetSectorByte(actors[0].absX, actors[0].absY) = 48 THEN
+                 doMask := FALSE
+               END |
+            4: IF (actors[0].absX >= (imx + 1) * TilePixW) OR
+                  (ystop > 35) THEN
+                 doMask := FALSE
+               END |
+            5: IF (actors[0].absX >= (imx + 1) * TilePixW) AND
+                  (ystop > 35) THEN
+                 doMask := FALSE
+               END |
+            6: (* full if character above tile, else use full mask *)  |
+            7: IF ystop > 20 THEN doMask := FALSE END
+          ELSE
+            doMask := FALSE
+          END;
+          IF doMask THEN
+            pb := tilePB[imgIdx];
+            IF pb # NIL THEN
+              ShadowBlitRGBA(pb, shadowPB,
+                             0, tileY, 0, maskY,
+                             overlayPB,
+                             sx, sy, TilePixW, TilePixH)
+            END
           END
         END
       END
