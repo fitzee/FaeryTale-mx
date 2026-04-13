@@ -22,7 +22,8 @@ FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      activeBrother;
 FROM NPC IMPORT InitNPCs, CheckNPCInteract, GetSpeech;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
-                   CheckRegionSwitch, SwitchRegion, DetectRegion;
+                   CheckRegionSwitch, SwitchRegion, DetectRegion,
+                   GetTerrainAt;
 FROM Menu IMPORT HandleMenuKey, SetOptions;
 FROM Doors IMPORT InitDoors, CheckDoor;
 
@@ -241,6 +242,13 @@ VAR newX, newY, newReg: INTEGER;
 BEGIN
   IF doorCooldown > 0 THEN
     DEC(doorCooldown);
+    RETURN
+  END;
+  (* Only check outdoor doors when standing on a door tile (terrain 15),
+     matching original which triggers doorfind on proxcheck==15.
+     Indoor exits always check. *)
+  IF (currentRegion < 8) AND
+     (GetTerrainAt(actors[0].absX, actors[0].absY) # 15) THEN
     RETURN
   END;
   IF CheckDoor(actors[0].absX, actors[0].absY, currentRegion,

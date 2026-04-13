@@ -175,7 +175,10 @@ BEGIN
      Sprite is 16x32, drawn at (absX-8, absY-16). *)
   sprWorldX := actors[0].absX - 8;
   sprWorldY := actors[0].absY - 16;
-  ground := actors[0].absY - camY;
+  (* Original: ground = ystart + 32 where ystart = sprite screen top.
+     Sprite top = absY - 16 (in world coords), so on screen:
+     ystart = absY - camY - 16, ground = ystart + 32 = absY - camY + 16 *)
+  ground := actors[0].absY - camY + 16;
 
   (* Tile range overlapping sprite *)
   xbw := sprWorldX DIV TilePixW;

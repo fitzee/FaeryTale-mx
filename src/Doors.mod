@@ -141,6 +141,17 @@ BEGIN
         i := j + 1
       ELSE
         dt := d.dtype;
+        (* Direction check from original fmain.c:2532-2538:
+           Horizontal door (type & 1): only enter when hero_y bit 4 = 0
+           Vertical door: only enter when (hero_x & 15) <= 6 *)
+        IF (dt MOD 2) = 1 THEN
+          IF BAND(CARDINAL(heroY), 16) # 0 THEN
+            RETURN FALSE
+          END
+        ELSIF (heroX MOD 16) > 6 THEN
+          RETURN FALSE
+        END;
+
         IF dt = CAVE THEN
           newX := d.xc2 + 24;
           newY := d.yc2 + 16
