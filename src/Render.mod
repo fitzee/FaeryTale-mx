@@ -20,7 +20,7 @@ FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
 FROM Assets IMPORT tileTex, tileOverlay, tilePB, shadowPB, hudTex,
                    brotherTex, currentRegion, GetSectorByte, GetMaskType,
-                   GetMapTag;
+                   GetTilesBits, GetMapTag;
 FROM PixBuf IMPORT PBuf, Create AS PBCreate, Clear AS PBClear,
                    Render AS PBRender, SetPalAlpha, SetPal,
                    PalR, PalG, PalB;
@@ -191,10 +191,11 @@ PROCEDURE DrawOverlay;
 VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
     pb: PBuf;
-    maskY, ystop: INTEGER;
+    maskY, ystop, heroSec: INTEGER;
     doMask: BOOLEAN;
 BEGIN
   IF currentRegion < 0 THEN RETURN END;
+  IF currentRegion >= 8 THEN RETURN END;  (* no overlay inside buildings *)
   IF (overlayPB = NIL) OR (overlayTex = NIL) THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
@@ -237,8 +238,12 @@ BEGIN
                  doMask := FALSE
                END |
             2: IF ystop > 35 THEN doMask := FALSE END |
-            3: (* always — except bridge: original checks hero_sector==48 *)
-               IF GetSectorByte(actors[0].absX, actors[0].absY) = 48 THEN
+            3: (* always — except on bridges/passable type-3 tiles.
+                  Bridge tiles have maskType=3, terrHi=0, tilesBits=0.
+                  Building tiles have tilesBits != 0. *)
+               heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
+               IF (GetMaskType(heroSec) = 3) AND
+                  (GetTilesBits(heroSec) = 0) THEN
                  doMask := FALSE
                END |
             4: IF (actors[0].absX >= (imx + 1) * TilePixW) OR

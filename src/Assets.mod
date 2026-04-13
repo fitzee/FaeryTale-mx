@@ -430,6 +430,14 @@ BEGIN
   RETURN (ORD(terraMem[cm + 1]) DIV 16) MOD 16
 END GetTerrainAt;
 
+PROCEDURE GetTilesBits(secByte: INTEGER): INTEGER;
+VAR cm: INTEGER;
+BEGIN
+  cm := secByte * 4;
+  IF (cm + 2 < 0) OR (cm + 2 >= 1024) THEN RETURN 0 END;
+  RETURN ORD(terraMem[cm + 2])
+END GetTilesBits;
+
 PROCEDURE GetMapTag(secByte: INTEGER): INTEGER;
 VAR cm: INTEGER;
 BEGIN
