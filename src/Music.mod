@@ -19,7 +19,7 @@ CONST
   EnvLen      = 256;    (* bytes per envelope *)
   OutputRate  = 22050;  (* output sample rate *)
   TickRate    = 50;     (* Amiga vblank rate (PAL) *)
-  SamplesPerTick = OutputRate DIV TickRate;  (* 441 samples per tick *)
+  SamplesPerTick = OutputRate DIV TickRate;  (* 441 samples at 50Hz tick rate *)
   AmigaClock  = 3546895; (* PAL clock for period→freq *)
 
 TYPE
@@ -361,11 +361,10 @@ BEGIN
       voices[i].volume := 0;
       voices[i].phase := 0.0;
       voices[i].active := TRUE;
-      (* Init voice waveform from instrument map *)
-      IF i < 4 THEN
-        voices[i].waveNum := insMap[i * 2] MOD 256;
-        voices[i].volNum := insMap[i * 2] DIV 256
-      END
+      (* Init voice waveform from instrument map.
+         new_wave[i] is big-endian: high byte = waveNum, low byte = volNum *)
+      voices[i].waveNum := insMap[i] DIV 256;
+      voices[i].volNum := insMap[i] MOD 256
     ELSE
       voices[i].active := FALSE
     END
@@ -419,11 +418,12 @@ BEGIN
         RETURN
       END
     ELSIF cmd = 129 THEN
-      (* Set instrument *)
+      (* Set instrument — val & 0x0F indexes into insMap.
+         Big-endian word: high byte = waveNum, low byte = volNum *)
       val := BAND(CARDINAL(val), 0FH);
-      IF val * 2 + 1 < 12 THEN
-        v.waveNum := insMap[val * 2] MOD 256;
-        v.volNum := insMap[val * 2] DIV 256
+      IF val < 12 THEN
+        v.waveNum := insMap[val] DIV 256;
+        v.volNum := insMap[val] MOD 256
       END
     ELSIF cmd = 144 THEN
       (* Set tempo *)
@@ -483,10 +483,12 @@ BEGIN
         waveBytes := voices[i].waveLen * 2;
         IF waveBytes <= 0 THEN waveBytes := 64 END;
 
-        (* Amiga period to frequency *)
+        (* Amiga period to byte-read rate.
+           The Amiga DMA reads one byte every 'period' cycles.
+           Byte rate = AmigaClock / period.
+           Phase increment = bytes per output sample = byteRate / outputRate *)
         freq := FLOAT(AmigaClock) / FLOAT(voices[i].period);
-        (* Phase increment: how many waveform bytes to advance per output sample *)
-        phaseInc := freq * FLOAT(waveBytes) / FLOAT(OutputRate);
+        phaseInc := freq / FLOAT(OutputRate);
 
         (* Get waveform sample — 8-bit signed *)
         phaseInt := TRUNC(voices[i].phase) MOD waveBytes;
@@ -519,18 +521,17 @@ BEGIN
   IF NOT inited THEN RETURN END;
   IF nosound THEN RETURN END;
 
-  (* Don't queue too far ahead — S16 mono = 2 bytes per sample *)
-  IF GetQueuedBytes(dev) > CARDINAL(SamplesPerTick * 8) THEN RETURN END;
+  (* Skip if audio queue is full — this naturally throttles
+     60fps game loop to 50Hz tracker rate *)
+  IF GetQueuedBytes(dev) > CARDINAL(SamplesPerTick * 4) THEN RETURN END;
 
-  (* Advance tracker *)
-  INC(timeclock, tempo);
+  (* Advance tracker and generate audio together *)
+  INC(timeclock, LONGINT(tempo));
 
-  (* Process each voice *)
   FOR i := 0 TO 3 DO
     ProcessVoice(voices[i])
   END;
 
-  (* Generate PCM output *)
   GenerateSamples;
 
   INC(dbgCount);
