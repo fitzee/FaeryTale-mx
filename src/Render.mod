@@ -20,8 +20,8 @@ FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
 FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
 FROM Assets IMPORT tileTex, hudTex, brotherTex, shadowPB,
-                   currentRegion, GetSectorByte, GetMaskType,
-                   GetTilesBits, GetMapTag, DetectRegion,
+                   currentRegion, GetSectorByte, GetSectorByteForRegion,
+                   GetMaskType, GetTilesBits, GetMapTag, DetectRegion,
                    regions, NumRegions, LoadImgCached;
 FROM PixBuf IMPORT PBuf, GetPix AS PBGetPix;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
@@ -65,22 +65,15 @@ BEGIN
 
   FOR imy := startIY TO endIY DO
     FOR imx := startIX TO endIX DO
+      (* Use current region's sector data for all tiles.
+         The original uses one region for the entire screen —
+         the map/sector data wraps correctly at boundaries. *)
       secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
       imgIdx := secByte DIV 64;
       tileY := (secByte MOD 64) * TilePixH;
       sx := imx * TilePixW - camX;
       sy := imy * TilePixH - camY;
-
-      (* Look up correct texture for this tile's world position.
-         At region boundaries, tiles may belong to a different region
-         than the current one. Use DetectRegion to find the right
-         image bank for each tile. *)
-      tileReg := DetectRegion(imx * TilePixW, imy * TilePixH);
-      IF (tileReg >= 0) AND (tileReg < NumRegions) THEN
-        tex := LoadImgCached(regions[tileReg].image[imgIdx])
-      ELSE
-        tex := tileTex[imgIdx]
-      END;
+      tex := tileTex[imgIdx];
 
       IF tex # NIL THEN
         DrawTexRegion(tex,

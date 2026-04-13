@@ -43,6 +43,7 @@ PROCEDURE PreloadAll(): BOOLEAN;
 PROCEDURE LoadHUD(targetW, targetH: INTEGER): BOOLEAN;
 PROCEDURE SwitchRegion(regionIdx: INTEGER);
 PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
+PROCEDURE GetSectorByteForRegion(x, y, regIdx: INTEGER): INTEGER;
 PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
 PROCEDURE GetMaskType(secByte: INTEGER): INTEGER;
 PROCEDURE GetTilesBits(secByte: INTEGER): INTEGER;

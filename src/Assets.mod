@@ -370,14 +370,80 @@ BEGIN
   RETURN hudTex # NIL
 END LoadHUD;
 
+PROCEDURE GetSectorByteForRegion(x, y, regIdx: INTEGER): INTEGER;
+VAR imx, imy, secx, secy, secNum, offset: INTEGER;
+    rxr, ryr: INTEGER;
+BEGIN
+  IF (regIdx < 0) OR (regIdx >= NumRegions) THEN RETURN 0 END;
+  imx := x DIV TileW;
+  imy := y DIV TileH;
+
+  (* Compute xReg/yReg for the target region *)
+  IF regIdx < 8 THEN
+    rxr := (regIdx MOD 2) * 64;
+    ryr := (regIdx DIV 2) * 32
+  ELSE
+    rxr := 0;
+    ryr := (regIdx DIV 2) * 32
+  END;
+
+  secx := (imx DIV 16) - rxr;
+  IF (secx < 0) OR (secx >= 64) THEN
+    IF BAND(CARDINAL(secx), 32) = 0 THEN
+      secx := 0
+    ELSE
+      secx := BAND(CARDINAL(secx), 63)
+    END
+  END;
+  secy := (imy DIV 8) - ryr;
+  IF secy < 0 THEN secy := 0 END;
+  IF secy >= 32 THEN secy := 31 END;
+
+  offset := secy * 128 + secx + rxr;
+  IF (offset < 0) OR (offset >= MapSize) THEN RETURN 0 END;
+  CASE regions[regIdx].region OF
+    160: secNum := ORD(map160[offset]) |
+    168: secNum := ORD(map168[offset]) |
+    176: secNum := ORD(map176[offset]) |
+    184: secNum := ORD(map184[offset]) |
+    192: secNum := ORD(map192[offset])
+  ELSE
+    secNum := 0
+  END;
+  offset := secNum * 128 + (imy MOD 8) * 16 + (imx MOD 16);
+  IF (offset < 0) OR (offset >= SectorSize) THEN RETURN 0 END;
+  IF regions[regIdx].sector = 96 THEN
+    RETURN ORD(sect096[offset])
+  ELSE
+    RETURN ORD(sect032[offset])
+  END
+END GetSectorByteForRegion;
+
 PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
 VAR imx, imy, secx, secy, secNum, offset: INTEGER;
 BEGIN
   imx := x DIV TileW;
   imy := y DIV TileH;
-  secx := (imx DIV 16) MOD 128;
-  secy := (imy DIV 8) MOD 32;
-  offset := secy * 128 + secx;
+
+  (* Original px_to_im uses xReg/yReg offsets:
+     secx = (imx/16) - xReg, then wrap to 0-127
+     secy = (imy/8) - yReg, then clamp to 0-31
+     sec_num = secy*128 + secx + xReg *)
+  secx := (imx DIV 16) - xReg;
+  (* Wrapping logic from original *)
+  IF (secx < 0) OR (secx >= 64) THEN
+    IF BAND(CARDINAL(secx), 32) = 0 THEN
+      secx := 0
+    ELSE
+      secx := BAND(CARDINAL(secx), 63)
+    END
+  END;
+
+  secy := (imy DIV 8) - yReg;
+  IF secy < 0 THEN secy := 0 END;
+  IF secy >= 32 THEN secy := 31 END;
+
+  offset := secy * 128 + secx + xReg;
   IF (offset < 0) OR (offset >= MapSize) THEN RETURN 0 END;
   (* Read from active map buffer *)
   CASE activeMap OF
@@ -501,8 +567,6 @@ END DetectRegion;
 PROCEDURE CheckRegionSwitch(px, py: INTEGER);
 VAR newReg: INTEGER;
 BEGIN
-  (* Don't auto-switch when inside buildings (regions 8-9).
-     Door system handles exit back to outdoor regions. *)
   IF currentRegion >= 8 THEN RETURN END;
   newReg := DetectRegion(px, py);
   IF (newReg # currentRegion) AND (newReg >= 0) AND (newReg < 8) THEN
