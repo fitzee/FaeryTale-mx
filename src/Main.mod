@@ -11,6 +11,7 @@ FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
 FROM BmFont IMPORT LoadFont;
 FROM Compass IMPORT InitCompass;
+FROM Music IMPORT InitMusic, UpdateMusic, ShutdownMusic;
 
 VAR
   frameStart, elapsed: INTEGER;
@@ -31,12 +32,16 @@ BEGIN
   InitCompass(ren);
   InitOverlay;
   InitGame;
+  IF NOT InitMusic() THEN
+    WriteString("Warning: music init failed"); WriteLn
+  END;
   InitDebugMap;
 
   WHILE running DO
     frameStart := GetTicks();
 
     UpdateGame;
+    UpdateMusic;
 
     IF mapToggled THEN ToggleDebugMap END;
 
@@ -58,5 +63,6 @@ BEGIN
     END
   END;
 
+  ShutdownMusic;
   Shutdown
 END Main.

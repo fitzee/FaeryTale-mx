@@ -1,0 +1,20 @@
+DEFINITION MODULE Music;
+
+(* SMUS tracker engine for Faery Tale Adventure music.
+   4-voice sequenced playback using original game data. *)
+
+CONST
+  MoodDay    = 0;   (* tracks 0-3: daytime exploration *)
+  MoodBattle = 4;   (* tracks 4-7: combat *)
+  MoodNight  = 8;   (* tracks 8-11: nighttime *)
+  MoodSpec   = 16;  (* tracks 16-19: special location *)
+  MoodIndoor = 20;  (* tracks 20-23: indoor/building *)
+  MoodDeath  = 24;  (* tracks 24-27: death *)
+
+PROCEDURE InitMusic(): BOOLEAN;
+PROCEDURE ShutdownMusic;
+PROCEDURE SetMood(mood: INTEGER);
+PROCEDURE UpdateMusic;
+PROCEDURE StopMusic;
+
+END Music.

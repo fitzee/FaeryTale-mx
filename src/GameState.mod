@@ -25,6 +25,7 @@ FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
                    GetTerrainAt;
 FROM Menu IMPORT HandleMenuKey, SetOptions;
+FROM Music IMPORT SetMood, MoodDay, MoodNight, MoodIndoor;
 FROM Doors IMPORT InitDoors, CheckDoor;
 
 VAR
@@ -296,6 +297,16 @@ BEGIN
   (* Original uses camera position (map_x/map_y) for region detection *)
   CheckRegionSwitch(camX, camY);
   UpdateDayNight;
+
+  (* Set music mood based on game state *)
+  IF currentRegion >= 8 THEN
+    SetMood(MoodIndoor)
+  ELSIF brightness > 75 THEN
+    SetMood(MoodDay)
+  ELSE
+    SetMood(MoodNight)
+  END;
+
   IF currentRegion >= 8 THEN
     (* Interiors are always fully lit *)
     brightness := 100;

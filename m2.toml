@@ -9,3 +9,4 @@ includes=src
 m2gfx
 m2sys
 m2blitter=path:../m2blitter
+m2audio=path:../sndys/m2audio
