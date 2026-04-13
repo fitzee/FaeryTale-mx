@@ -212,7 +212,7 @@ BEGIN
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: (* always overlay — original: case 3: break *) |
+        3: (* always overlay *) |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
         5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
         6: (* always *) |
