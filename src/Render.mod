@@ -188,92 +188,83 @@ BEGIN
 END SetAmigaPalette;
 
 PROCEDURE DrawOverlay;
-VAR imx, imy, sx, sy, secByte, imgIdx, tileY, maskType: INTEGER;
-    startIX, startIY, endIX, endIY: INTEGER;
+VAR xm, ym, imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
+    maskType, maskY, ystop, heroSec, ground: INTEGER;
+    xbw, ym1, ym2, blitwide: INTEGER;
     pb: PBuf;
-    maskY, ystop, heroSec: INTEGER;
     doMask: BOOLEAN;
 BEGIN
   IF currentRegion < 0 THEN RETURN END;
-  IF currentRegion >= 8 THEN RETURN END;  (* no overlay inside buildings *)
   IF (overlayPB = NIL) OR (overlayTex = NIL) THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
-  (* Clear: fill indexed with 0, convert to RGBA (all transparent) *)
   SetPalAlpha(overlayPB, 0, 0, 0, 0, 0);
   PBClear(overlayPB, 0);
   PBRender(ren, overlayTex, overlayPB);
 
-  startIX := camX DIV TilePixW - 1;
-  startIY := camY DIV TilePixH - 1;
-  endIX := (camX + PlayW) DIV TilePixW + 1;
-  endIY := (camY + PlayH) DIV TilePixH + 1;
-  IF startIX < 0 THEN startIX := 0 END;
-  IF startIY < 0 THEN startIY := 0 END;
+  (* Match original fmain.c:3582-3635 exactly.
+     Iterate over tile cells overlapping the character sprite.
+     Sprite: 16px wide, 32px tall. Origin at (absX-8, absY-24). *)
+  ground := actors[0].absY - camY;  (* feet Y in screen coords *)
+  xbw := (actors[0].absX - 8) DIV TilePixW;
+  ym1 := (actors[0].absY - 24) DIV TilePixH;
+  blitwide := ((actors[0].absX + 8) DIV TilePixW) - xbw + 1;
+  ym2 := (actors[0].absY DIV TilePixH) - ym1;
 
-  FOR imy := startIY TO endIY DO
-    FOR imx := startIX TO endIX DO
+  heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
+
+  FOR xm := 0 TO blitwide - 1 DO
+    FOR ym := 0 TO ym2 DO
+      imx := xbw + xm;
+      imy := ym1 + ym;
+
+      (* ystop = ground - tile_row_screen_Y, matching original:
+         ystop = ground - ((ym + ym1) << 5) *)
+      ystop := ground - (imy * TilePixH - camY);
+
       secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
       maskType := GetMaskType(secByte);
 
-      IF maskType >= 1 THEN
+      doMask := TRUE;
+      CASE maskType OF
+        0: doMask := FALSE |
+        1: IF xm = 0 THEN doMask := FALSE END |
+        2: IF ystop > 35 THEN doMask := FALSE END |
+        3: IF (GetMaskType(heroSec) = 3) AND
+              (GetTilesBits(heroSec) = 0) THEN
+             doMask := FALSE
+           END |
+        4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
+        5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
+        6: (* always *) |
+        7: IF ystop > 20 THEN doMask := FALSE END
+      ELSE
+        doMask := FALSE
+      END;
+
+      IF doMask THEN
         imgIdx := secByte DIV 64;
         tileY := (secByte MOD 64) * TilePixH;
         sx := imx * TilePixW - camX;
         sy := imy * TilePixH - camY;
         maskY := GetMapTag(secByte) * TilePixH;
 
-        (* Matching original fmain.c:3588-3631 exactly.
-           ystop = ground - tile_row_Y (how far below tile the feet are)
-           xm approximation: is character left or right of tile center *)
         IF (sx + TilePixW > 0) AND (sx < PlayW) AND
            (sy + TilePixH > 0) AND (sy < PlayH) AND
            (imgIdx >= 0) AND (imgIdx <= 3) AND
            (maskY + TilePixH <= 6144) THEN
-          ystop := (actors[0].absY - camY) - sy;
-          doMask := TRUE;
-          CASE maskType OF
-            0: doMask := FALSE |
-            1: IF actors[0].absX >= (imx + 1) * TilePixW THEN
-                 doMask := FALSE
-               END |
-            2: IF ystop > 35 THEN doMask := FALSE END |
-            3: (* always — except on bridges/passable type-3 tiles.
-                  Bridge tiles have maskType=3, terrHi=0, tilesBits=0.
-                  Building tiles have tilesBits != 0. *)
-               heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
-               IF (GetMaskType(heroSec) = 3) AND
-                  (GetTilesBits(heroSec) = 0) THEN
-                 doMask := FALSE
-               END |
-            4: IF (actors[0].absX >= (imx + 1) * TilePixW) OR
-                  (ystop > 35) THEN
-                 doMask := FALSE
-               END |
-            5: IF (actors[0].absX >= (imx + 1) * TilePixW) AND
-                  (ystop > 35) THEN
-                 doMask := FALSE
-               END |
-            6: (* full if character above tile, else use full mask *)  |
-            7: IF ystop > 20 THEN doMask := FALSE END
-          ELSE
-            doMask := FALSE
-          END;
-          IF doMask THEN
-            pb := tilePB[imgIdx];
-            IF pb # NIL THEN
-              ShadowBlitRGBA(pb, shadowPB,
-                             0, tileY, 0, maskY,
-                             overlayPB,
-                             sx, sy, TilePixW, TilePixH)
-            END
+          pb := tilePB[imgIdx];
+          IF pb # NIL THEN
+            ShadowBlitRGBA(pb, shadowPB,
+                           0, tileY, 0, maskY,
+                           overlayPB,
+                           sx, sy, TilePixW, TilePixH)
           END
         END
       END
     END
   END;
 
-  (* Upload RGBA buffer (with ShadowBlitRGBA's pixels) to texture *)
   gfx_pb_flush_tex(overlayTex, overlayPB);
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
   TexDrawRegion(ren, overlayTex,
