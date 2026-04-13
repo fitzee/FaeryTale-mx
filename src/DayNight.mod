@@ -1,66 +1,71 @@
 IMPLEMENTATION MODULE DayNight;
 
+(* Matches original FTA day/night exactly.
+   Original runs at 50Hz. We run at 60fps.
+   Use a fractional accumulator to advance daynight at 50Hz. *)
+
+VAR
+  tickAccum: INTEGER;  (* accumulates 50ths at 60fps *)
+
 PROCEDURE InitDayNight;
 BEGIN
-  timeOfDay := 0;
-  brightness := 100;
-  isNight := FALSE
+  (* Start at midday: daynight=6000 gives lightlevel=150, full bright *)
+  daynight := 6000;
+  tickAccum := 0;
+  UpdateLightLevel
 END InitDayNight;
 
-PROCEDURE UpdateDayNight;
-VAR phase, half: INTEGER;
+PROCEDURE UpdateLightLevel;
 BEGIN
-  INC(timeOfDay);
-  IF timeOfDay >= DayLength THEN timeOfDay := 0 END;
-
-  half := DayLength DIV 2;
-
-  IF timeOfDay < half THEN
-    (* Day phase: ramp up then down *)
-    phase := timeOfDay;
-    IF phase < half DIV 4 THEN
-      (* Dawn *)
-      brightness := 40 + (phase * 60) DIV (half DIV 4)
-    ELSIF phase < half * 3 DIV 4 THEN
-      (* Full day *)
-      brightness := 100
-    ELSE
-      (* Dusk *)
-      brightness := 100 - ((phase - half * 3 DIV 4) * 60) DIV (half DIV 4)
-    END
-  ELSE
-    (* Night phase *)
-    phase := timeOfDay - half;
-    IF phase < half DIV 4 THEN
-      (* Early night *)
-      brightness := 40 - (phase * 15) DIV (half DIV 4)
-    ELSIF phase < half * 3 DIV 4 THEN
-      (* Deep night *)
-      brightness := 25
-    ELSE
-      (* Pre-dawn *)
-      brightness := 25 + ((phase - half * 3 DIV 4) * 15) DIV (half DIV 4)
-    END
+  lightlevel := daynight DIV 40;
+  IF lightlevel >= 300 THEN
+    lightlevel := 600 - lightlevel
   END;
+  isNight := lightlevel <= 120;
+  (* brightness for backward compat: scale lightlevel 0..300 to 0..100 *)
+  brightness := lightlevel * 100 DIV 300;
+  IF brightness > 100 THEN brightness := 100 END
+END UpdateLightLevel;
 
-  IF brightness < 25 THEN brightness := 25 END;
-  IF brightness > 100 THEN brightness := 100 END;
-  isNight := brightness < 50
+PROCEDURE UpdateDayNight;
+BEGIN
+  (* Advance daynight at 50Hz from a 60fps game loop.
+     50/60 = 5/6. Accumulate: add 5 per frame, tick when >= 6. *)
+  INC(tickAccum, 5);
+  WHILE tickAccum >= 6 DO
+    DEC(tickAccum, 6);
+    INC(daynight);
+    IF daynight >= DayNightMax THEN daynight := 0 END
+  END;
+  UpdateLightLevel
 END UpdateDayNight;
 
-PROCEDURE GetTint(VAR r, g, b: INTEGER);
+PROCEDURE GetFadeRGB(VAR r, g, b: INTEGER);
 BEGIN
-  (* Original uses different fade curves for R, G, B
-     Night has blue shift like original nighttime palette *)
-  r := brightness;
-  g := brightness;
-  b := brightness;
-  IF isNight THEN
-    (* Blue shift at night, matching original's limit behavior *)
-    IF r < 30 THEN r := 30 END;
-    IF g < 40 THEN g := 40 END;
-    IF b < 70 THEN b := 70 END
-  END
-END GetTint;
+  (* Original: fade_page(lightlevel-80+ll, lightlevel-61, lightlevel-62, TRUE, pagecolors)
+     where ll=0 normally (no light_timer).
+     So r = lightlevel - 80, g = lightlevel - 61, b = lightlevel - 62.
+     Clamped by fade_page: r min 10, g min 25, b min 60 (when limit=TRUE). *)
+  r := lightlevel - 80;
+  g := lightlevel - 61;
+  b := lightlevel - 62;
+  (* Night limits from fade_page *)
+  IF r < 10 THEN r := 10 END;
+  IF g < 25 THEN g := 25 END;
+  IF b < 60 THEN b := 60 END;
+  IF r > 100 THEN r := 100 END;
+  IF g > 100 THEN g := 100 END;
+  IF b > 100 THEN b := 100 END
+END GetFadeRGB;
+
+PROCEDURE PaletteTickDue(): BOOLEAN;
+BEGIN
+  RETURN BAND(CARDINAL(daynight), 3) = 0
+END PaletteTickDue;
+
+PROCEDURE MusicTickDue(): BOOLEAN;
+BEGIN
+  RETURN BAND(CARDINAL(daynight), 7) = 0
+END MusicTickDue;
 
 END DayNight.

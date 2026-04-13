@@ -4,7 +4,8 @@ FROM SYSTEM IMPORT ADDRESS;
 FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, Scale,
                     DrawTexRegion;
 FROM Texture IMPORT Draw AS TexDraw, DrawRegion AS TexDrawRegion,
-                    Width AS TexWidth, Height AS TexHeight;
+                    Width AS TexWidth, Height AS TexHeight,
+                    SetColorMod;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Canvas IMPORT SetColor, FillRect, DrawRect, SetClip, ClearClip;
 FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
@@ -17,7 +18,8 @@ FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
-FROM DayNight IMPORT brightness, isNight, GetTint;
+FROM DayNight IMPORT brightness, isNight, lightlevel, GetFadeRGB,
+                     PaletteTickDue;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
 FROM Assets IMPORT tileTex, hudTex, brotherTex, shadowPB,
                    currentRegion, GetSectorByte, GetSectorByteForRegion,
@@ -39,7 +41,8 @@ CONST
 
 PROCEDURE InitOverlay;
 BEGIN
-  (* Sprite masking uses shadow_mem PixBuf directly — no setup needed *)
+  fadeR := 255; fadeG := 255; fadeB := 255;
+  UpdateFade
 END InitOverlay;
 
 PROCEDURE S(v: INTEGER): INTEGER;
@@ -49,11 +52,29 @@ END S;
 
 (* ---- World drawing ---- *)
 
+VAR
+  fadeR, fadeG, fadeB: INTEGER;  (* cached palette fade values 0..100 *)
+
+PROCEDURE UpdateFade;
+VAR r, g, b: INTEGER;
+BEGIN
+  GetFadeRGB(r, g, b);
+  fadeR := r * 255 DIV 100;
+  fadeG := g * 255 DIV 100;
+  fadeB := b * 255 DIV 100;
+  IF fadeR > 255 THEN fadeR := 255 END;
+  IF fadeG > 255 THEN fadeG := 255 END;
+  IF fadeB > 255 THEN fadeB := 255 END
+END UpdateFade;
+
 PROCEDURE DrawWorldTiled;
 VAR imx, imy, sx, sy, secByte, imgIdx, tileY, tileReg: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
     tex: ADDRESS;
 BEGIN
+  (* Update palette fade every 4 ticks, matching original *)
+  IF PaletteTickDue() THEN UpdateFade END;
+
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
   startIX := camX DIV TilePixW - 1;
@@ -76,6 +97,8 @@ BEGIN
       tex := tileTex[imgIdx];
 
       IF tex # NIL THEN
+        (* Apply day/night fade via SetColorMod matching original palette math *)
+        SetColorMod(tex, fadeR, fadeG, fadeB);
         DrawTexRegion(tex,
                       0, tileY, TilePixW, TilePixH,
                       S(sx), S(sy), S(TilePixW), S(TilePixH))
@@ -359,6 +382,9 @@ BEGIN
   END;
 
   IF srcH <= 0 THEN RETURN END;
+
+  (* Apply same day/night fade to sprite *)
+  SetColorMod(tex, fadeR, fadeG, fadeB);
 
   (* Build sprite mask from overlapping tiles *)
   BuildSpriteMask;

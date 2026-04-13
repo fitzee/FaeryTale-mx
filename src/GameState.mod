@@ -16,7 +16,8 @@ FROM Items IMPORT InitItems, CheckPickup, UseItem, InventoryCount,
                   SpawnItem,
                   ItemNone, ItemGold, ItemFood, ItemPotion,
                   ItemSword, ItemKey, ItemGem, ItemShield, ItemScroll;
-FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight;
+FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
+                     lightlevel, MusicTickDue;
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
                      activeBrother;
@@ -298,13 +299,16 @@ BEGIN
   CheckRegionSwitch(camX, camY);
   UpdateDayNight;
 
-  (* Set music mood based on game state *)
-  IF currentRegion >= 8 THEN
-    SetMood(MoodIndoor)
-  ELSIF brightness > 75 THEN
-    SetMood(MoodDay)
-  ELSE
-    SetMood(MoodNight)
+  (* Set music mood matching original: checked every 8 daynight ticks.
+     Day if lightlevel > 120, night otherwise. *)
+  IF MusicTickDue() THEN
+    IF currentRegion >= 8 THEN
+      SetMood(MoodIndoor)
+    ELSIF lightlevel > 120 THEN
+      SetMood(MoodDay)
+    ELSE
+      SetMood(MoodNight)
+    END
   END;
 
   IF currentRegion >= 8 THEN

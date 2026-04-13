@@ -17,9 +17,9 @@ CONST
   VolBufSize  = 2560;   (* 10 envelopes × 256 bytes *)
   WaveLen     = 128;    (* bytes per waveform *)
   EnvLen      = 256;    (* bytes per envelope *)
-  OutputRate  = 22050;  (* output sample rate *)
+  OutputRate  = 44100;  (* output sample rate — higher for better quality *)
   TickRate    = 50;     (* Amiga vblank rate (PAL) *)
-  SamplesPerTick = OutputRate DIV TickRate;  (* 441 samples at 50Hz tick rate *)
+  SamplesPerTick = OutputRate DIV TickRate;  (* 882 samples at 50Hz tick rate *)
   AmigaClock  = 3546895; (* PAL clock for period→freq *)
 
 TYPE
@@ -292,6 +292,7 @@ BEGIN
   nosound := TRUE;
   dbgCount := 0;
   tickAccum := 0;
+  lpState := 0.0;
   currentMood := -1;
   timeclock := 0;
   tempo := 150;
@@ -308,7 +309,7 @@ BEGIN
     RETURN FALSE
   END;
 
-  dev := OpenDevice(OutputRate, 1, FormatS16, 1024);
+  dev := OpenDevice(OutputRate, 1, FormatS16, 2048);
   IF dev = 0 THEN
     WriteString("Music: audio device open failed"); WriteLn;
     QuitAudio;
@@ -468,10 +469,22 @@ BEGIN
   END
 END ProcessVoice;
 
+VAR
+  lpState: LONGREAL;  (* low-pass filter state *)
+
+PROCEDURE GetWavSample(idx: INTEGER): LONGREAL;
+VAR v: INTEGER;
+BEGIN
+  IF (idx < 0) OR (idx >= WavBufSize) THEN RETURN 0.0 END;
+  v := ORD(wavMem[idx]);
+  IF v >= 128 THEN DEC(v, 256) END;
+  RETURN FLOAT(v) / 128.0
+END GetWavSample;
+
 (* Render one output sample by mixing all 4 voices *)
 PROCEDURE RenderSample(): LONGREAL;
-VAR i, waveBase, waveIdx, waveBytes, sampleVal, phaseInt: INTEGER;
-    freq, phaseInc, mix: LONGREAL;
+VAR i, waveBase, waveBytes, idx0, idx1: INTEGER;
+    freq, phaseInc, mix, frac, s0, s1, voiceSample: LONGREAL;
 BEGIN
   mix := 0.0;
   FOR i := 0 TO 3 DO
@@ -484,15 +497,17 @@ BEGIN
       freq := FLOAT(AmigaClock) / FLOAT(voices[i].period);
       phaseInc := freq / FLOAT(OutputRate);
 
-      phaseInt := TRUNC(voices[i].phase) MOD waveBytes;
-      IF phaseInt < 0 THEN phaseInt := 0 END;
-      waveIdx := waveBase + phaseInt;
-      IF (waveIdx >= 0) AND (waveIdx < WavBufSize) THEN
-        sampleVal := ORD(wavMem[waveIdx]);
-        IF sampleVal >= 128 THEN DEC(sampleVal, 256) END;
-        mix := mix + FLOAT(sampleVal) * FLOAT(voices[i].volume) /
-                     (64.0 * 128.0)
-      END;
+      (* Linear interpolation between adjacent waveform samples *)
+      idx0 := TRUNC(voices[i].phase) MOD waveBytes;
+      IF idx0 < 0 THEN idx0 := 0 END;
+      idx1 := (idx0 + 1) MOD waveBytes;
+      frac := voices[i].phase - FLOAT(TRUNC(voices[i].phase));
+
+      s0 := GetWavSample(waveBase + idx0);
+      s1 := GetWavSample(waveBase + idx1);
+      voiceSample := s0 + (s1 - s0) * frac;
+
+      mix := mix + voiceSample * FLOAT(voices[i].volume) / 64.0;
 
       voices[i].phase := voices[i].phase + phaseInc;
       WHILE voices[i].phase >= FLOAT(waveBytes) DO
@@ -500,10 +515,15 @@ BEGIN
       END
     END
   END;
-  IF mix > 1.0 THEN mix := 1.0
-  ELSIF mix < -1.0 THEN mix := -1.0
+
+  (* Simple one-pole low-pass filter to emulate Amiga's analog output.
+     Cutoff ~4kHz at 44100Hz: alpha ~= 0.5 *)
+  lpState := lpState * 0.6 + mix * 0.4;
+
+  IF lpState > 1.0 THEN RETURN 1.0
+  ELSIF lpState < -1.0 THEN RETURN -1.0
   END;
-  RETURN mix
+  RETURN lpState
 END RenderSample;
 
 (* Advance the sequencer by one 50 Hz tick *)
@@ -520,8 +540,8 @@ END SequencerTick;
 
 PROCEDURE UpdateMusic;
 CONST
-  MaxSamplesPerCall = 882;   (* ~40ms per call, keeps game responsive *)
-  QueueTarget = 1764;        (* keep ~80ms buffered *)
+  MaxSamplesPerCall = 882;   (* ~20ms per call at 44100Hz *)
+  QueueTarget = 2646;        (* keep ~60ms buffered *)
 VAR s, toGenerate, sampleCount: INTEGER;
     queued: CARDINAL;
     ok: BOOLEAN;

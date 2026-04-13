@@ -1,18 +1,30 @@
 DEFINITION MODULE DayNight;
 
-(* Pure Modula-2 day/night cycle.
-   Original uses daynight counter to fade palette RGB. *)
+(* Day/night cycle matching original FTA exactly.
+   daynight counter 0..23999, 50Hz tick rate, 8 minute full cycle.
+   lightlevel is a triangle wave 0..300..0.
+   Palette updates every 4 ticks. Music switch every 8 ticks. *)
 
 CONST
-  DayLength = 7200;  (* ~2 minutes at 60fps = one full cycle *)
+  DayNightMax = 24000;
 
 VAR
-  timeOfDay: INTEGER;  (* 0..DayLength-1 *)
-  brightness: INTEGER; (* 0..100 *)
-  isNight: BOOLEAN;
+  daynight:   INTEGER;    (* 0..23999, increments at 50Hz *)
+  lightlevel: INTEGER;    (* 0..300 triangle wave *)
+  isNight:    BOOLEAN;    (* lightlevel <= 120 *)
+  brightness: INTEGER;    (* kept for compatibility: lightlevel * 100 / 300 *)
 
 PROCEDURE InitDayNight;
 PROCEDURE UpdateDayNight;
-PROCEDURE GetTint(VAR r, g, b: INTEGER);
+
+(* Palette fade parameters for current lightlevel.
+   Returns r, g, b fade values for fade_page. *)
+PROCEDURE GetFadeRGB(VAR r, g, b: INTEGER);
+
+(* Should palette update this tick? (daynight & 3 = 0) *)
+PROCEDURE PaletteTickDue(): BOOLEAN;
+
+(* Should music mood be re-evaluated? (daynight & 7 = 0) *)
+PROCEDURE MusicTickDue(): BOOLEAN;
 
 END DayNight.
