@@ -152,6 +152,11 @@ BEGIN
   END
 END DrawWorld;
 
+PROCEDURE IsBridgeSurface(sec: INTEGER): BOOLEAN;
+BEGIN
+  RETURN (GetMaskType(sec) = 3) AND (GetTilesBits(sec) = 0)
+END IsBridgeSurface;
+
 PROCEDURE OnBridge(sec: INTEGER): BOOLEAN;
 BEGIN
   (* All bridge-related sector bytes — surface AND edges.
@@ -198,6 +203,7 @@ BEGIN
 
   heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
 
+
   FOR xm := 0 TO blitwide - 1 DO
     FOR ym := 0 TO ym2 DO
       imx := xbw + xm;
@@ -208,11 +214,17 @@ BEGIN
       maskType := GetMaskType(secByte);
 
       doMask := TRUE;
+      (* Skip overlay for bridge-related tiles entirely *)
+      IF OnBridge(secByte) THEN doMask := FALSE END;
       CASE maskType OF
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: (* always overlay *) |
+        3: (* always overlay — except fully passable type-3 tiles
+              (bridge surfaces). These have tilesBits=0. *)
+           IF GetTilesBits(secByte) = 0 THEN
+             doMask := FALSE
+           END |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
         5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
         6: (* always *) |
