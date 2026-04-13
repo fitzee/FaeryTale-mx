@@ -12,6 +12,7 @@ FROM Menu IMPORT InitMenus;
 FROM BmFont IMPORT LoadFont;
 FROM Compass IMPORT InitCompass;
 FROM Music IMPORT InitMusic, UpdateMusic, ShutdownMusic;
+FROM WorldObj IMPORT InitWorldObjects, LoadObjectSprites, DrawWorldObjects;
 
 VAR
   frameStart, elapsed: INTEGER;
@@ -32,6 +33,8 @@ BEGIN
   InitCompass(ren);
   InitOverlay;
   InitGame;
+  InitWorldObjects;
+  LoadObjectSprites;
   IF NOT InitMusic() THEN
     WriteString("Warning: music init failed"); WriteLn
   END;
@@ -47,6 +50,7 @@ BEGIN
 
     BeginFrame;
     DrawWorld;
+    DrawWorldObjects;
     DrawItems;
     DrawActors;
     DrawHUD;

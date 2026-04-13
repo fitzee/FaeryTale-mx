@@ -28,6 +28,7 @@ FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
 FROM Menu IMPORT HandleMenuKey, SetOptions;
 FROM Music IMPORT SetMood, MoodDay, MoodNight, MoodIndoor;
 FROM Doors IMPORT InitDoors, CheckDoor;
+FROM WorldObj IMPORT CheckObjectPickup;
 
 VAR
   input: InputState;
@@ -107,6 +108,41 @@ BEGIN
     SetOptions
   END
 END HandlePickup;
+
+PROCEDURE HandleWorldPickup;
+VAR id: INTEGER;
+BEGIN
+  id := CheckObjectPickup(actors[0].absX, actors[0].absY);
+  IF id >= 0 THEN
+    CASE id OF
+      13: ShowMessage("Found gold!") |
+      14: ShowMessage("Found an urn!") |
+      15: ShowMessage("Found a chest!") |
+      16: ShowMessage("Found some sacks!") |
+      17: ShowMessage("Found a gold ring!") |
+      18: ShowMessage("Found a blue stone!") |
+      19: ShowMessage("Found a gold jewel!") |
+      20: ShowMessage("Found a scrap of paper!") |
+      22: ShowMessage("Found a vial!") |
+      23: ShowMessage("Found a totem!") |
+      24: ShowMessage("Found a skull!") |
+      25: ShowMessage("Found a gold key!") |
+      26: ShowMessage("Found a grey key!") |
+     102: ShowMessage("Found a turtle!") |
+     114: ShowMessage("Found a blue key!") |
+     145: ShowMessage("Found a magic wand!") |
+     148: ShowMessage("Found some fruit!") |
+     149: ShowMessage("Found a gold statue!") |
+     151: ShowMessage("Found a shell!") |
+     153: ShowMessage("Found a green key!") |
+     154: ShowMessage("Found a white key!") |
+     242: ShowMessage("Found a red key!")
+    ELSE
+      ShowMessage("Found something!")
+    END;
+    SetOptions
+  END
+END HandleWorldPickup;
 
 PROCEDURE HandleTalk;
 VAR npcIdx: INTEGER;
@@ -285,6 +321,7 @@ BEGIN
   END;
   UpdatePlayer;
   HandlePickup;
+  HandleWorldPickup;
   CheckEnvironment;
   CheckEnemyDrops;
   UpdateEnemies;

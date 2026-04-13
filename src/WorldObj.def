@@ -1,0 +1,61 @@
+DEFINITION MODULE WorldObj;
+
+(* World objects matching original FTA placement data.
+   Objects have world coordinates, type ID, and status.
+   Status: 0=none, 1=ground(collectible), 2=inventory,
+           3=NPC, 4=dead NPC, 5=look-only, 6=cabinet *)
+
+FROM SYSTEM IMPORT ADDRESS;
+
+CONST
+  MaxWorldObjs = 200;
+  MaxRegionObjs = 80;
+
+  (* Object IDs matching original *)
+  ObjQuiver   = 11;
+  ObjMoney    = 13;
+  ObjUrn      = 14;
+  ObjChest    = 15;
+  ObjSacks    = 16;
+  ObjGRing    = 17;
+  ObjBStone   = 18;
+  ObjGJewel   = 19;
+  ObjScrap    = 20;
+  ObjCOrb     = 21;
+  ObjVial     = 22;
+  ObjBTotem   = 23;
+  ObjJSkull   = 24;
+  ObjGoldKey  = 25;
+  ObjGreyKey  = 26;
+  ObjTurtle   = 102;
+  ObjBlueKey  = 114;
+  ObjMWand    = 145;
+  ObjMeal     = 146;
+  ObjRose     = 147;
+  ObjFruit    = 148;
+  ObjStatue   = 149;
+  ObjBook     = 150;
+  ObjShell    = 151;
+  ObjGreenKey = 153;
+  ObjWhiteKey = 154;
+  ObjRedKey   = 242;
+
+TYPE
+  WorldObject = RECORD
+    x, y:   INTEGER;
+    objId:  INTEGER;
+    status: INTEGER;   (* 0=none, 1=ground, 2=inventory, 3=NPC *)
+    region: INTEGER    (* which region this object belongs to, -1=global *)
+  END;
+
+VAR
+  objects: ARRAY [0..199] OF WorldObject;
+  objCount: INTEGER;
+  objTex: ADDRESS;  (* object sprite sheet texture *)
+
+PROCEDURE InitWorldObjects;
+PROCEDURE LoadObjectSprites;
+PROCEDURE DrawWorldObjects;
+PROCEDURE CheckObjectPickup(heroX, heroY: INTEGER): INTEGER;
+
+END WorldObj.
