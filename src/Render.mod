@@ -152,6 +152,21 @@ BEGIN
   END
 END DrawWorld;
 
+PROCEDURE OnBridge(sec: INTEGER): BOOLEAN;
+BEGIN
+  (* All bridge-related sector bytes — surface AND edges.
+     Surface (type 3): 48, 70, 71, 83, 91, 94, 114, 115, 118, 119
+     Edges (type 2): 108, 111, 120, 121
+     Side rails: 72, 88, 103, 104, 117 *)
+  RETURN (sec = 48) OR (sec = 70) OR (sec = 71) OR (sec = 72) OR
+         (sec = 83) OR (sec = 88) OR (sec = 91) OR (sec = 94) OR
+         (sec = 103) OR (sec = 104) OR
+         (sec = 108) OR (sec = 111) OR
+         (sec = 114) OR (sec = 115) OR (sec = 117) OR
+         (sec = 118) OR (sec = 119) OR
+         (sec = 120) OR (sec = 121)
+END OnBridge;
+
 PROCEDURE DrawOverlay;
 VAR xm, ym, imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
     maskType, maskY, ystop, heroSec, ground: INTEGER;
@@ -197,15 +212,7 @@ BEGIN
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: (* Always overlay — except on bridges.
-              Bridge sector bytes: 48, 70, 71, 83, 91, 94,
-              114, 115, 118, 119 (all type-3, passable surfaces). *)
-           IF (heroSec = 48) OR (heroSec = 70) OR (heroSec = 71) OR
-              (heroSec = 83) OR (heroSec = 91) OR (heroSec = 94) OR
-              (heroSec = 114) OR (heroSec = 115) OR
-              (heroSec = 118) OR (heroSec = 119) THEN
-             doMask := FALSE
-           END |
+        3: (* always overlay — original: case 3: break *) |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
         5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
         6: (* always *) |
