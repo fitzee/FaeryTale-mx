@@ -485,11 +485,14 @@ BEGIN
   END
 END TerrainSpeedAt;
 
-PROCEDURE DetectRegion(px, py: INTEGER): INTEGER;
+PROCEDURE DetectRegion(mapX, mapY: INTEGER): INTEGER;
 VAR xs, ys, xr, yr: INTEGER;
 BEGIN
-  xs := (px + 151) DIV 256;
-  ys := (py + 64) DIV 256;
+  (* Original uses map_x/map_y (camera position), not hero position.
+     xs = (map_x + 151) >> 8, xr = (xs >> 6) & 1
+     ys = (map_y + 64) >> 8,  yr = (ys >> 5) & 3 *)
+  xs := (mapX + 151) DIV 256;
+  ys := (mapY + 64) DIV 256;
   xr := (xs DIV 64) MOD 2;
   yr := (ys DIV 32) MOD 4;
   RETURN xr + yr * 2

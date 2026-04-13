@@ -8,7 +8,7 @@ FROM Actor IMPORT actors, actorCount, InitAll,
                   StWalking, StStill, StFighting, StDead, StDying,
                   GoalAttack1, GoalStand;
 FROM World IMPORT InitWorld, TileSize, WorldW, WorldH, UpdateCamera,
-                  GetTerrain, TerrSwamp, TerrWater;
+                  GetTerrain, TerrSwamp, TerrWater, camX, camY;
 FROM Movement IMPORT MoveActor;
 FROM EnemyAI IMPORT UpdateEnemies;
 FROM Combat IMPORT UpdateCombat;
@@ -253,7 +253,6 @@ BEGIN
       (* Exiting indoor — force detect outdoor region *)
       SwitchRegion(DetectRegion(newX, newY))
     END;
-    regionFade := 10;
     doorCooldown := 60;  (* ~1 second cooldown *)
     ShowMessage("You enter...")
   END
@@ -286,11 +285,8 @@ BEGIN
   UpdateCamera(actors[0].absX, actors[0].absY);
   (* Region switch with fade *)
   prevRegion := currentRegion;
-  CheckRegionSwitch(actors[0].absX, actors[0].absY);
-  IF currentRegion # prevRegion THEN
-    regionFade := 10
-  END;
-  IF regionFade > 0 THEN DEC(regionFade) END;
+  (* Original uses camera position (map_x/map_y) for region detection *)
+  CheckRegionSwitch(camX, camY);
   UpdateDayNight;
   IF currentRegion >= 8 THEN
     (* Interiors are always fully lit *)

@@ -6,8 +6,7 @@ FROM Platform IMPORT Init, Shutdown, BeginFrame, EndFrame,
 FROM GameState IMPORT InitGame, UpdateGame, running, FrameTime,
                       mapToggled;
 FROM Render IMPORT InitOverlay, DrawWorld, DrawItems, DrawActors,
-                   DrawHUD, DrawCompass, DrawMenu, DrawRegionFade,
-                   DrawMessage;
+                   DrawHUD, DrawCompass, DrawMenu, DrawMessage;
 FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
 FROM BmFont IMPORT LoadFont;
@@ -45,7 +44,6 @@ BEGIN
     DrawWorld;
     DrawItems;
     DrawActors;
-    DrawRegionFade;
     DrawHUD;
     DrawCompass;
     DrawMenu;
