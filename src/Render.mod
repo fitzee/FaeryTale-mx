@@ -230,20 +230,24 @@ BEGIN
            5 = overlay when right OR above
            6 = always if character is above tile row
            7 = overlay when above, close range *)
-        (* Mask type filtering: skip overlay when character is in front.
-           Compare character feet Y against tile BOTTOM edge.
-           Tile bottom = (imy + 1) * TilePixH *)
-        IF (maskType = 1) AND (actors[0].absX <= imx * TilePixW) THEN
-          (* type 1: skip when character is LEFT of tile *)
+        (* Mask type filtering matching original fmain.c:3599-3630.
+           Type 1: skip when character is RIGHT of tile (xm==0 skip)
+           Type 2: skip when character feet below tile bottom
+           Type 3: always overlay
+           Type 4: skip when right OR below
+           Type 5: skip when right AND below *)
+        IF (maskType = 1) AND
+           (actors[0].absX >= (imx + 1) * TilePixW) THEN
+          (* type 1: skip when character is fully RIGHT of tile *)
         ELSIF (maskType = 2) AND
               (actors[0].absY >= (imy + 1) * TilePixH) THEN
-          (* type 2: skip when character feet are BELOW tile bottom *)
+          (* type 2: skip when character feet BELOW tile bottom *)
         ELSIF (maskType = 4) AND
-              ((actors[0].absX <= imx * TilePixW) OR
+              ((actors[0].absX >= (imx + 1) * TilePixW) OR
                (actors[0].absY >= (imy + 1) * TilePixH)) THEN
-          (* type 4: skip if either condition fails *)
+          (* type 4: skip if either fails *)
         ELSIF (maskType = 5) AND
-              ((actors[0].absX <= imx * TilePixW) AND
+              ((actors[0].absX >= (imx + 1) * TilePixW) AND
                (actors[0].absY >= (imy + 1) * TilePixH)) THEN
           (* type 5: skip only if both fail *)
         ELSIF (sx + TilePixW > 0) AND (sx < PlayW) AND
