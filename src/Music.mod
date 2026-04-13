@@ -72,6 +72,7 @@ VAR
 
   inited: BOOLEAN;
   dbgCount: INTEGER;
+  tickAccum: INTEGER;  (* sample counter for 50Hz sequencer tick *)
 
 PROCEDURE InitPtable;
 VAR i: INTEGER;
@@ -290,6 +291,7 @@ BEGIN
   inited := FALSE;
   nosound := TRUE;
   dbgCount := 0;
+  tickAccum := 0;
   currentMood := -1;
   timeclock := 0;
   tempo := 150;
@@ -344,11 +346,11 @@ VAR i, tIdx: INTEGER;
 BEGIN
   IF NOT inited THEN RETURN END;
   IF mood = currentMood THEN RETURN END;
-  WriteString("Music: mood "); WriteInt(mood, 2); WriteLn;
   currentMood := mood;
 
   (* Set 4 voices to tracks mood+0..mood+3 *)
   timeclock := 0;
+  tickAccum := 0;
   FOR i := 0 TO 3 DO
     tIdx := mood + i;
     IF (tIdx >= 0) AND (tIdx < numTracks) THEN
@@ -466,89 +468,100 @@ BEGIN
   END
 END ProcessVoice;
 
-PROCEDURE GenerateSamples;
-VAR i, s, waveBase, waveIdx, waveBytes, sampleVal, phaseInt: INTEGER;
-    freq, phaseInc: LONGREAL;
-    mix: LONGREAL;
+(* Render one output sample by mixing all 4 voices *)
+PROCEDURE RenderSample(): LONGREAL;
+VAR i, waveBase, waveIdx, waveBytes, sampleVal, phaseInt: INTEGER;
+    freq, phaseInc, mix: LONGREAL;
 BEGIN
-  FOR s := 0 TO SamplesPerTick - 1 DO
-    mix := 0.0;
-    FOR i := 0 TO 3 DO
-      IF voices[i].active AND (voices[i].volume > 0) AND
-         (voices[i].period > 0) THEN
-        (* Waveform base = waveNum * 128 bytes + waveOff bytes.
-           In original: d4 = wave_num << 7, then d4 += offset*4.
-           waveLen = (32 - offset) words = (32 - offset) * 2 bytes. *)
-        waveBase := voices[i].waveNum * WaveLen + voices[i].waveOff;
-        waveBytes := voices[i].waveLen * 2;
-        IF waveBytes <= 0 THEN waveBytes := 64 END;
+  mix := 0.0;
+  FOR i := 0 TO 3 DO
+    IF voices[i].active AND (voices[i].volume > 0) AND
+       (voices[i].period > 0) THEN
+      waveBase := voices[i].waveNum * WaveLen + voices[i].waveOff;
+      waveBytes := voices[i].waveLen * 2;
+      IF waveBytes <= 0 THEN waveBytes := 64 END;
 
-        (* Amiga period to byte-read rate.
-           The Amiga DMA reads one byte every 'period' cycles.
-           Byte rate = AmigaClock / period.
-           Phase increment = bytes per output sample = byteRate / outputRate *)
-        freq := FLOAT(AmigaClock) / FLOAT(voices[i].period);
-        phaseInc := freq / FLOAT(OutputRate);
+      freq := FLOAT(AmigaClock) / FLOAT(voices[i].period);
+      phaseInc := freq / FLOAT(OutputRate);
 
-        (* Get waveform sample — 8-bit signed *)
-        phaseInt := TRUNC(voices[i].phase) MOD waveBytes;
-        IF phaseInt < 0 THEN phaseInt := 0 END;
-        waveIdx := waveBase + phaseInt;
-        IF (waveIdx >= 0) AND (waveIdx < WavBufSize) THEN
-          sampleVal := ORD(wavMem[waveIdx]);
-          IF sampleVal >= 128 THEN DEC(sampleVal, 256) END;
-          mix := mix + FLOAT(sampleVal) * FLOAT(voices[i].volume) /
-                       (64.0 * 128.0);
-        END;
+      phaseInt := TRUNC(voices[i].phase) MOD waveBytes;
+      IF phaseInt < 0 THEN phaseInt := 0 END;
+      waveIdx := waveBase + phaseInt;
+      IF (waveIdx >= 0) AND (waveIdx < WavBufSize) THEN
+        sampleVal := ORD(wavMem[waveIdx]);
+        IF sampleVal >= 128 THEN DEC(sampleVal, 256) END;
+        mix := mix + FLOAT(sampleVal) * FLOAT(voices[i].volume) /
+                     (64.0 * 128.0)
+      END;
 
-        voices[i].phase := voices[i].phase + phaseInc;
-        WHILE voices[i].phase >= FLOAT(waveBytes) DO
-          voices[i].phase := voices[i].phase - FLOAT(waveBytes)
-        END
+      voices[i].phase := voices[i].phase + phaseInc;
+      WHILE voices[i].phase >= FLOAT(waveBytes) DO
+        voices[i].phase := voices[i].phase - FLOAT(waveBytes)
       END
-    END;
-    IF mix > 1.0 THEN mix := 1.0
-    ELSIF mix < -1.0 THEN mix := -1.0
-    END;
-    outBuf[s] := mix
+    END
+  END;
+  IF mix > 1.0 THEN mix := 1.0
+  ELSIF mix < -1.0 THEN mix := -1.0
+  END;
+  RETURN mix
+END RenderSample;
+
+(* Advance the sequencer by one 50 Hz tick *)
+PROCEDURE SequencerTick;
+VAR i: INTEGER;
+BEGIN
+  (* 2x multiplier empirically matches original playback speed.
+     Original runs timeclock += tempo at 50Hz PAL vblank. *)
+  INC(timeclock, LONGINT(tempo) * 2);
+  FOR i := 0 TO 3 DO
+    ProcessVoice(voices[i])
   END
-END GenerateSamples;
+END SequencerTick;
 
 PROCEDURE UpdateMusic;
-VAR i: INTEGER;
+CONST
+  MaxSamplesPerCall = 882;   (* ~40ms per call, keeps game responsive *)
+  QueueTarget = 1764;        (* keep ~80ms buffered *)
+VAR s, toGenerate, sampleCount: INTEGER;
+    queued: CARDINAL;
     ok: BOOLEAN;
 BEGIN
   IF NOT inited THEN RETURN END;
   IF nosound THEN RETURN END;
 
-  (* Skip if audio queue is full — this naturally throttles
-     60fps game loop to 50Hz tracker rate *)
-  IF GetQueuedBytes(dev) > CARDINAL(SamplesPerTick * 4) THEN RETURN END;
+  (* Determine how many samples to generate this call.
+     Fill up to QueueTarget bytes ahead (1 sample = 2 bytes S16). *)
+  queued := GetQueuedBytes(dev);
+  IF queued >= CARDINAL(QueueTarget * 2) THEN RETURN END;
+  toGenerate := QueueTarget - INTEGER(queued) DIV 2;
+  IF toGenerate > MaxSamplesPerCall THEN toGenerate := MaxSamplesPerCall END;
+  IF toGenerate <= 0 THEN RETURN END;
 
-  (* Advance tracker and generate audio together *)
-  INC(timeclock, LONGINT(tempo));
+  (* Generate audio in chunks of SamplesPerTick (441).
+     The sequencer ticks once per chunk boundary — exactly 50 Hz. *)
+  sampleCount := 0;
+  WHILE sampleCount < toGenerate DO
+    (* If we've reached a tick boundary, advance the sequencer *)
+    IF tickAccum >= SamplesPerTick THEN
+      DEC(tickAccum, SamplesPerTick);
+      SequencerTick
+    END;
 
-  FOR i := 0 TO 3 DO
-    ProcessVoice(voices[i])
+    (* Render one sample *)
+    outBuf[sampleCount] := RenderSample();
+    INC(sampleCount);
+    INC(tickAccum);
+
+    (* Safety: don't overflow outBuf *)
+    IF sampleCount >= 1024 THEN
+      ok := QueueSamples(dev, ADR(outBuf), sampleCount, 1);
+      sampleCount := 0
+    END
   END;
 
-  GenerateSamples;
-
-  INC(dbgCount);
-  IF FALSE THEN  (* disabled debug *)
-    WriteString("tick tc="); WriteInt(INTEGER(timeclock), 8);
-    WriteString(" v0vol="); WriteInt(voices[0].volume, 3);
-    WriteString(" v0per="); WriteInt(voices[0].period, 5);
-    WriteString(" v0act=");
-    IF voices[0].active THEN WriteString("Y") ELSE WriteString("N") END;
-    WriteString(" queued="); WriteInt(INTEGER(GetQueuedBytes(dev)), 6);
-    WriteLn
-  END;
-
-  (* Queue to SDL *)
-  ok := QueueSamples(dev, ADR(outBuf), SamplesPerTick, 1);
-  IF NOT ok THEN
-    WriteString("Music: queue failed"); WriteLn
+  (* Queue remaining samples *)
+  IF sampleCount > 0 THEN
+    ok := QueueSamples(dev, ADR(outBuf), sampleCount, 1)
   END
 END UpdateMusic;
 
