@@ -164,9 +164,10 @@ BEGIN
   IF currentRegion < 0 THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
-  (* Sprite world position (top-left) *)
+  (* Sprite world position (top-left).
+     Sprite is 16x32, drawn at (absX-8, absY-16). *)
   sprWorldX := actors[0].absX - 8;
-  sprWorldY := actors[0].absY - 24;
+  sprWorldY := actors[0].absY - 16;
   ground := actors[0].absY - camY;
 
   (* Tile range overlapping sprite *)
@@ -191,7 +192,8 @@ BEGIN
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: (* always *) |
+        3: (* Original: case 3: break; — always mask.
+              But also has goto nomask for specific cases. *)  |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
         5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
         6: (* always *) |
@@ -199,6 +201,7 @@ BEGIN
       ELSE
         doMask := FALSE
       END;
+
 
       IF doMask THEN
         maskY := GetMapTag(secByte) * TilePixH;

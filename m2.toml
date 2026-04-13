@@ -1,6 +1,7 @@
 name=faerytale
 version=0.1.0
 edition=m2plus
+backend=llvm
 entry=src/Main.mod
 includes=src
 
