@@ -22,11 +22,10 @@ FROM Assets IMPORT tileTex, tileOverlay, tilePB, shadowPB, hudTex,
                    brotherTex, currentRegion, GetSectorByte, GetMaskType,
                    GetTilesBits, GetMapTag;
 FROM PixBuf IMPORT PBuf, Create AS PBCreate, Clear AS PBClear,
-                   Render AS PBRender, SetPalAlpha, SetPal,
-                   PalR, PalG, PalB;
-FROM GfxBridge IMPORT gfx_pb_flush_tex;
+                   Render AS PBRender, SetPalAlpha;
 FROM Texture IMPORT Create AS TexCreate, Tex, SetBlendMode;
 FROM Blitter IMPORT ShadowBlitRGBA;
+FROM GfxBridge IMPORT gfx_pb_flush_tex;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
                  MSave, MKeys, MGive;
@@ -41,15 +40,19 @@ CONST
   TilePixH = 32;
 
 VAR
-  overlayPB: PBuf;
-  overlayTex: Tex;
+  spriteMaskPB: PBuf;   (* small PixBuf covering sprite area + margin *)
+  spriteMaskTex: Tex;
+  smW, smH: INTEGER;    (* mask buffer dimensions in tiles *)
 
 PROCEDURE InitOverlay;
 BEGIN
-  overlayPB := PBCreate(PlayW, PlayH);
-  overlayTex := TexCreate(ren, PlayW, PlayH);
-  IF overlayTex # NIL THEN
-    SetBlendMode(overlayTex, 1)  (* BLEND_ALPHA *)
+  (* Small PixBuf for sprite-area overlay: 3 tiles wide, 3 tiles tall *)
+  smW := 3 * TilePixW;  (* 48 *)
+  smH := 3 * TilePixH;  (* 96 *)
+  spriteMaskPB := PBCreate(smW, smH);
+  spriteMaskTex := TexCreate(ren, smW, smH);
+  IF spriteMaskTex # NIL THEN
+    SetBlendMode(spriteMaskTex, 1)  (* BLEND_ALPHA *)
   END
 END InitOverlay;
 
@@ -149,67 +152,34 @@ BEGIN
   END
 END DrawWorld;
 
-PROCEDURE SetAmigaPalette(pb: PBuf);
-BEGIN
-  IF pb = NIL THEN RETURN END;
-  (* Original Amiga 32-color pagecolors palette *)
-  SetPalAlpha(pb, 0, 0, 0, 0, 0);  (* transparent *)
-  SetPal(pb,  1, 255, 255, 255);  (* 0xFFF *)
-  SetPal(pb,  2, 238, 153, 102);  (* 0xE96 *)
-  SetPal(pb,  3, 187, 102,  51);  (* 0xB63 *)
-  SetPal(pb,  4, 102,  51,  17);  (* 0x631 *)
-  SetPal(pb,  5, 119, 187, 255);  (* 0x7BF *)
-  SetPal(pb,  6,  51,  51,  51);  (* 0x333 *)
-  SetPal(pb,  7, 221, 187, 136);  (* 0xDB8 *)
-  SetPal(pb,  8,  34,  34,  51);  (* 0x223 *)
-  SetPal(pb,  9,  68,  68,  85);  (* 0x445 *)
-  SetPal(pb, 10, 136, 136, 153);  (* 0x889 *)
-  SetPal(pb, 11, 187, 187, 204);  (* 0xBBC *)
-  SetPal(pb, 12,  85,  34,  17);  (* 0x521 *)
-  SetPal(pb, 13, 153,  68,  17);  (* 0x941 *)
-  SetPal(pb, 14, 255, 136,  34);  (* 0xF82 *)
-  SetPal(pb, 15, 255, 204, 119);  (* 0xFC7 *)
-  SetPal(pb, 16,   0,  68,   0);  (* 0x040 *)
-  SetPal(pb, 17,   0, 119,   0);  (* 0x070 *)
-  SetPal(pb, 18,   0, 187,   0);  (* 0x0B0 *)
-  SetPal(pb, 19, 102, 255, 102);  (* 0x6F6 *)
-  SetPal(pb, 20,   0,   0,  85);  (* 0x005 *)
-  SetPal(pb, 21,   0,   0, 153);  (* 0x009 *)
-  SetPal(pb, 22,   0,   0, 221);  (* 0x00D *)
-  SetPal(pb, 23,  51, 119, 255);  (* 0x37F *)
-  SetPal(pb, 24, 204,   0,   0);  (* 0xC00 *)
-  SetPal(pb, 25, 255,  85,   0);  (* 0xF50 *)
-  SetPal(pb, 26, 255, 170,   0);  (* 0xFA0 *)
-  SetPal(pb, 27, 255, 255, 102);  (* 0xFF6 *)
-  SetPal(pb, 28, 238, 187, 102);  (* 0xEB6 *)
-  SetPal(pb, 29, 238, 170,  85);  (* 0xEA5 *)
-  SetPal(pb, 30,   0,   0, 255);  (* 0x00F *)
-  SetPal(pb, 31, 187, 221, 255)   (* 0xBDF *)
-END SetAmigaPalette;
-
 PROCEDURE DrawOverlay;
 VAR xm, ym, imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
     maskType, maskY, ystop, heroSec, ground: INTEGER;
     xbw, ym1, ym2, blitwide: INTEGER;
+    bufX, bufY: INTEGER;  (* position within sprite mask buffer *)
+    baseX, baseY: INTEGER;  (* world coords of buffer origin *)
     pb: PBuf;
     doMask: BOOLEAN;
 BEGIN
   IF currentRegion < 0 THEN RETURN END;
-  IF (overlayPB = NIL) OR (overlayTex = NIL) THEN RETURN END;
+  IF (spriteMaskPB = NIL) OR (spriteMaskTex = NIL) THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
-  SetPalAlpha(overlayPB, 0, 0, 0, 0, 0);
-  PBClear(overlayPB, 0);
-  PBRender(ren, overlayTex, overlayPB);
+  (* Clear sprite mask buffer to transparent *)
+  SetPalAlpha(spriteMaskPB, 0, 0, 0, 0, 0);
+  PBClear(spriteMaskPB, 0);
+  PBRender(ren, spriteMaskTex, spriteMaskPB);
 
-  (* Match original fmain.c:3582-3635 exactly.
-     Iterate over tile cells overlapping the character sprite.
-     Sprite: 16px wide, 32px tall. Origin at (absX-8, absY-24). *)
-  ground := actors[0].absY - camY;  (* feet Y in screen coords *)
-  xbw := (actors[0].absX - 8) DIV TilePixW;
-  ym1 := (actors[0].absY - 24) DIV TilePixH;
-  blitwide := ((actors[0].absX + 8) DIV TilePixW) - xbw + 1;
-  ym2 := (actors[0].absY DIV TilePixH) - ym1;
+  (* Tile range: center on sprite, 1 tile margin each side *)
+  ground := actors[0].absY - camY;
+  xbw := (actors[0].absX - 8) DIV TilePixW - 1;
+  ym1 := (actors[0].absY - 24) DIV TilePixH - 1;
+  blitwide := 3;  (* 3 tiles wide *)
+  ym2 := 2;       (* 3 tiles tall *)
+
+  (* Buffer origin in world coords *)
+  baseX := xbw * TilePixW;
+  baseY := ym1 * TilePixH;
 
   heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
 
@@ -217,9 +187,6 @@ BEGIN
     FOR ym := 0 TO ym2 DO
       imx := xbw + xm;
       imy := ym1 + ym;
-
-      (* ystop = ground - tile_row_screen_Y, matching original:
-         ystop = ground - ((ym + ym1) << 5) *)
       ystop := ground - (imy * TilePixH - camY);
 
       secByte := GetSectorByte(imx * TilePixW, imy * TilePixH);
@@ -230,8 +197,13 @@ BEGIN
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: IF (GetMaskType(heroSec) = 3) AND
-              (GetTilesBits(heroSec) = 0) THEN
+        3: (* Always overlay — except on bridges.
+              Bridge sector bytes: 48, 70, 71, 83, 91, 94,
+              114, 115, 118, 119 (all type-3, passable surfaces). *)
+           IF (heroSec = 48) OR (heroSec = 70) OR (heroSec = 71) OR
+              (heroSec = 83) OR (heroSec = 91) OR (heroSec = 94) OR
+              (heroSec = 114) OR (heroSec = 115) OR
+              (heroSec = 118) OR (heroSec = 119) THEN
              doMask := FALSE
            END |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
@@ -245,31 +217,34 @@ BEGIN
       IF doMask THEN
         imgIdx := secByte DIV 64;
         tileY := (secByte MOD 64) * TilePixH;
-        sx := imx * TilePixW - camX;
-        sy := imy * TilePixH - camY;
         maskY := GetMapTag(secByte) * TilePixH;
 
-        IF (sx + TilePixW > 0) AND (sx < PlayW) AND
-           (sy + TilePixH > 0) AND (sy < PlayH) AND
-           (imgIdx >= 0) AND (imgIdx <= 3) AND
+        (* Position within the sprite mask buffer *)
+        bufX := xm * TilePixW;
+        bufY := ym * TilePixH;
+
+        IF (imgIdx >= 0) AND (imgIdx <= 3) AND
            (maskY + TilePixH <= 6144) THEN
           pb := tilePB[imgIdx];
           IF pb # NIL THEN
             ShadowBlitRGBA(pb, shadowPB,
                            0, tileY, 0, maskY,
-                           overlayPB,
-                           sx, sy, TilePixW, TilePixH)
+                           spriteMaskPB,
+                           bufX, bufY, TilePixW, TilePixH)
           END
         END
       END
     END
   END;
 
-  gfx_pb_flush_tex(overlayTex, overlayPB);
+  (* Upload and draw the small overlay at the correct screen position *)
+  gfx_pb_flush_tex(spriteMaskTex, spriteMaskPB);
+  sx := (baseX - camX) * Scale;
+  sy := (baseY - camY) * Scale;
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
-  TexDrawRegion(ren, overlayTex,
-                0, 0, PlayW, PlayH,
-                0, 0, S(PlayW), S(PlayH));
+  TexDrawRegion(ren, spriteMaskTex,
+                0, 0, smW, smH,
+                sx, sy, smW * Scale, smH * Scale);
   ClearClip(ren)
 END DrawOverlay;
 
