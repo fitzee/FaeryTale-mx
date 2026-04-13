@@ -37,6 +37,7 @@ VAR
   brotherTex: ARRAY [0..2] OF ADDRESS;  (* Julian=0, Phillip=1, Kevin=2 *)
   xReg, yReg: INTEGER;
 
+PROCEDURE LoadImgCached(num: INTEGER): ADDRESS;
 PROCEDURE InitAssets;
 PROCEDURE PreloadAll(): BOOLEAN;
 PROCEDURE LoadHUD(targetW, targetH: INTEGER): BOOLEAN;

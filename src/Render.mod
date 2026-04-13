@@ -1,5 +1,6 @@
 IMPLEMENTATION MODULE Render;
 
+FROM SYSTEM IMPORT ADDRESS;
 FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, Scale,
                     DrawTexRegion;
 FROM Texture IMPORT Draw AS TexDraw, DrawRegion AS TexDrawRegion,
@@ -20,7 +21,8 @@ FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
 FROM Assets IMPORT tileTex, hudTex, brotherTex, shadowPB,
                    currentRegion, GetSectorByte, GetMaskType,
-                   GetTilesBits, GetMapTag;
+                   GetTilesBits, GetMapTag, DetectRegion,
+                   regions, NumRegions, LoadImgCached;
 FROM PixBuf IMPORT PBuf, GetPix AS PBGetPix;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
@@ -48,8 +50,9 @@ END S;
 (* ---- World drawing ---- *)
 
 PROCEDURE DrawWorldTiled;
-VAR imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
+VAR imx, imy, sx, sy, secByte, imgIdx, tileY, tileReg: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
+    tex: ADDRESS;
 BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
@@ -68,8 +71,19 @@ BEGIN
       sx := imx * TilePixW - camX;
       sy := imy * TilePixH - camY;
 
-      IF (imgIdx >= 0) AND (imgIdx <= 3) AND (tileTex[imgIdx] # NIL) THEN
-        DrawTexRegion(tileTex[imgIdx],
+      (* Look up correct texture for this tile's world position.
+         At region boundaries, tiles may belong to a different region
+         than the current one. Use DetectRegion to find the right
+         image bank for each tile. *)
+      tileReg := DetectRegion(imx * TilePixW, imy * TilePixH);
+      IF (tileReg >= 0) AND (tileReg < NumRegions) THEN
+        tex := LoadImgCached(regions[tileReg].image[imgIdx])
+      ELSE
+        tex := tileTex[imgIdx]
+      END;
+
+      IF tex # NIL THEN
+        DrawTexRegion(tex,
                       0, tileY, TilePixW, TilePixH,
                       S(sx), S(sy), S(TilePixW), S(TilePixH))
       END
