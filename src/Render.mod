@@ -18,14 +18,10 @@ FROM Items IMPORT items, itemCount, inventory,
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
 FROM DayNight IMPORT brightness, isNight, GetTint;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
-FROM Assets IMPORT tileTex, tileOverlay, tilePB, shadowPB, hudTex,
-                   brotherTex, currentRegion, GetSectorByte, GetMaskType,
+FROM Assets IMPORT tileTex, hudTex, brotherTex, shadowPB,
+                   currentRegion, GetSectorByte, GetMaskType,
                    GetTilesBits, GetMapTag;
-FROM PixBuf IMPORT PBuf, Create AS PBCreate, Clear AS PBClear,
-                   Render AS PBRender, SetPalAlpha;
-FROM Texture IMPORT Create AS TexCreate, Tex, SetBlendMode;
-FROM Blitter IMPORT ShadowBlitRGBA;
-FROM GfxBridge IMPORT gfx_pb_flush_tex;
+FROM PixBuf IMPORT PBuf, GetPix AS PBGetPix;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
                  MSave, MKeys, MGive;
@@ -39,21 +35,9 @@ CONST
   TilePixW = 16;
   TilePixH = 32;
 
-VAR
-  spriteMaskPB: PBuf;   (* small PixBuf covering sprite area + margin *)
-  spriteMaskTex: Tex;
-  smW, smH: INTEGER;    (* mask buffer dimensions in tiles *)
-
 PROCEDURE InitOverlay;
 BEGIN
-  (* Small PixBuf for sprite-area overlay: 3 tiles wide, 3 tiles tall *)
-  smW := 3 * TilePixW;  (* 48 *)
-  smH := 3 * TilePixH;  (* 96 *)
-  spriteMaskPB := PBCreate(smW, smH);
-  spriteMaskTex := TexCreate(ren, smW, smH);
-  IF spriteMaskTex # NIL THEN
-    SetBlendMode(spriteMaskTex, 1)  (* BLEND_ALPHA *)
-  END
+  (* Sprite masking uses shadow_mem PixBuf directly — no setup needed *)
 END InitOverlay;
 
 PROCEDURE S(v: INTEGER): INTEGER;
@@ -152,57 +136,46 @@ BEGIN
   END
 END DrawWorld;
 
-PROCEDURE IsBridgeSurface(sec: INTEGER): BOOLEAN;
-BEGIN
-  RETURN (GetMaskType(sec) = 3) AND (GetTilesBits(sec) = 0)
-END IsBridgeSurface;
+(* Build a composite sprite mask matching the original pipeline.
+   bmask starts as all TRUE (draw everything).
+   For each overlapping tile that passes the mask type check,
+   set bmask to FALSE where shadow_mem has a 1 (tile covers sprite).
+   Then DrawBrotherSprite uses bmask to skip blocked pixels. *)
 
-PROCEDURE OnBridge(sec: INTEGER): BOOLEAN;
-BEGIN
-  (* All bridge-related sector bytes — surface AND edges.
-     Surface (type 3): 48, 70, 71, 83, 91, 94, 114, 115, 118, 119
-     Edges (type 2): 108, 111, 120, 121
-     Side rails: 72, 88, 103, 104, 117 *)
-  RETURN (sec = 48) OR (sec = 70) OR (sec = 71) OR (sec = 72) OR
-         (sec = 83) OR (sec = 88) OR (sec = 91) OR (sec = 94) OR
-         (sec = 103) OR (sec = 104) OR
-         (sec = 108) OR (sec = 111) OR
-         (sec = 114) OR (sec = 115) OR (sec = 117) OR
-         (sec = 118) OR (sec = 119) OR
-         (sec = 120) OR (sec = 121)
-END OnBridge;
+VAR
+  bmask: ARRAY [0..15] OF ARRAY [0..31] OF BOOLEAN;
 
-PROCEDURE DrawOverlay;
-VAR xm, ym, imx, imy, sx, sy, secByte, imgIdx, tileY: INTEGER;
-    maskType, maskY, ystop, heroSec, ground: INTEGER;
+PROCEDURE BuildSpriteMask;
+VAR xm, ym, imx, imy, px, py, secByte, maskType: INTEGER;
+    maskY, ystop, heroSec, ground: INTEGER;
     xbw, ym1, ym2, blitwide: INTEGER;
-    bufX, bufY: INTEGER;  (* position within sprite mask buffer *)
-    baseX, baseY: INTEGER;  (* world coords of buffer origin *)
-    pb: PBuf;
+    sprWorldX, sprWorldY: INTEGER;
+    tileWorldX, tileWorldY: INTEGER;
+    localX, localY, shadowX, shadowY: INTEGER;
     doMask: BOOLEAN;
 BEGIN
+  (* Init: all pixels drawable *)
+  FOR px := 0 TO 15 DO
+    FOR py := 0 TO 31 DO
+      bmask[px][py] := TRUE
+    END
+  END;
+
   IF currentRegion < 0 THEN RETURN END;
-  IF (spriteMaskPB = NIL) OR (spriteMaskTex = NIL) THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
-  (* Clear sprite mask buffer to transparent *)
-  SetPalAlpha(spriteMaskPB, 0, 0, 0, 0, 0);
-  PBClear(spriteMaskPB, 0);
-  PBRender(ren, spriteMaskTex, spriteMaskPB);
-
-  (* Tile range: center on sprite, 1 tile margin each side *)
+  (* Sprite world position (top-left) *)
+  sprWorldX := actors[0].absX - 8;
+  sprWorldY := actors[0].absY - 24;
   ground := actors[0].absY - camY;
-  xbw := (actors[0].absX - 8) DIV TilePixW - 1;
-  ym1 := (actors[0].absY - 24) DIV TilePixH - 1;
-  blitwide := 3;  (* 3 tiles wide *)
-  ym2 := 2;       (* 3 tiles tall *)
 
-  (* Buffer origin in world coords *)
-  baseX := xbw * TilePixW;
-  baseY := ym1 * TilePixH;
+  (* Tile range overlapping sprite *)
+  xbw := sprWorldX DIV TilePixW;
+  ym1 := sprWorldY DIV TilePixH;
+  blitwide := ((sprWorldX + SprW - 1) DIV TilePixW) - xbw + 1;
+  ym2 := ((sprWorldY + SprH - 1) DIV TilePixH) - ym1;
 
   heroSec := GetSectorByte(actors[0].absX, actors[0].absY);
-
 
   FOR xm := 0 TO blitwide - 1 DO
     FOR ym := 0 TO ym2 DO
@@ -214,17 +187,11 @@ BEGIN
       maskType := GetMaskType(secByte);
 
       doMask := TRUE;
-      (* Skip overlay for bridge-related tiles entirely *)
-      IF OnBridge(secByte) THEN doMask := FALSE END;
       CASE maskType OF
         0: doMask := FALSE |
         1: IF xm = 0 THEN doMask := FALSE END |
         2: IF ystop > 35 THEN doMask := FALSE END |
-        3: (* always overlay — except fully passable type-3 tiles
-              (bridge surfaces). These have tilesBits=0. *)
-           IF GetTilesBits(secByte) = 0 THEN
-             doMask := FALSE
-           END |
+        3: (* always *) |
         4: IF (xm = 0) OR (ystop > 35) THEN doMask := FALSE END |
         5: IF (xm = 0) AND (ystop > 35) THEN doMask := FALSE END |
         6: (* always *) |
@@ -234,38 +201,34 @@ BEGIN
       END;
 
       IF doMask THEN
-        imgIdx := secByte DIV 64;
-        tileY := (secByte MOD 64) * TilePixH;
         maskY := GetMapTag(secByte) * TilePixH;
+        tileWorldX := imx * TilePixW;
+        tileWorldY := imy * TilePixH;
 
-        (* Position within the sprite mask buffer *)
-        bufX := xm * TilePixW;
-        bufY := ym * TilePixH;
-
-        IF (imgIdx >= 0) AND (imgIdx <= 3) AND
-           (maskY + TilePixH <= 6144) THEN
-          pb := tilePB[imgIdx];
-          IF pb # NIL THEN
-            ShadowBlitRGBA(pb, shadowPB,
-                           0, tileY, 0, maskY,
-                           spriteMaskPB,
-                           bufX, bufY, TilePixW, TilePixH)
+        (* For each pixel in the overlap region, check shadow mask.
+           If shadow pixel is set, block the sprite pixel. *)
+        FOR py := 0 TO TilePixH - 1 DO
+          FOR px := 0 TO TilePixW - 1 DO
+            (* Position in sprite coordinates *)
+            localX := (tileWorldX + px) - sprWorldX;
+            localY := (tileWorldY + py) - sprWorldY;
+            IF (localX >= 0) AND (localX < SprW) AND
+               (localY >= 0) AND (localY < SprH) THEN
+              (* Check shadow mask *)
+              shadowX := px;
+              shadowY := maskY + py;
+              IF (shadowY >= 0) AND (shadowY < 6144) THEN
+                IF PBGetPix(shadowPB, shadowX, shadowY) # 0 THEN
+                  bmask[localX][localY] := FALSE
+                END
+              END
+            END
           END
         END
       END
     END
-  END;
-
-  (* Upload and draw the small overlay at the correct screen position *)
-  gfx_pb_flush_tex(spriteMaskTex, spriteMaskPB);
-  sx := (baseX - camX) * Scale;
-  sy := (baseY - camY) * Scale;
-  SetClip(ren, 0, 0, S(PlayW), S(PlayH));
-  TexDrawRegion(ren, spriteMaskTex,
-                0, 0, smW, smH,
-                sx, sy, smW * Scale, smH * Scale);
-  ClearClip(ren)
-END DrawOverlay;
+  END
+END BuildSpriteMask;
 
 (* ---- Items ---- *)
 
@@ -355,7 +318,7 @@ END GetSpriteFrame;
 
 PROCEDURE DrawBrotherSprite(brotherIdx, frame, sx, sy, env: INTEGER);
 VAR tex: ADDRESS;
-    srcY, srcH, dstY, dstH, clipBot: INTEGER;
+    srcY, srcH, dstY, dstH, clipBot, px, py: INTEGER;
 BEGIN
   IF (brotherIdx < 0) OR (brotherIdx > 2) THEN RETURN END;
   tex := brotherTex[brotherIdx];
@@ -384,8 +347,20 @@ BEGIN
 
   IF srcH <= 0 THEN RETURN END;
 
-  DrawTexRegion(tex, 0, srcY, SprW, srcH,
-                sx - S(8), dstY, S(SprW), dstH)
+  (* Build sprite mask from overlapping tiles *)
+  BuildSpriteMask;
+
+  (* Draw sprite pixel-by-pixel, skipping where bmask is FALSE.
+     Each source pixel becomes Scale x Scale screen pixels. *)
+  FOR py := 0 TO srcH - 1 DO
+    FOR px := 0 TO SprW - 1 DO
+      IF bmask[px][py] THEN
+        DrawTexRegion(tex, px, srcY + py, 1, 1,
+                      sx - S(8) + px * Scale, dstY + py * Scale,
+                      Scale, Scale)
+      END
+    END
+  END
 END DrawBrotherSprite;
 
 PROCEDURE DrawActorBody(i, sx, sy: INTEGER);
