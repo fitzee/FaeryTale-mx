@@ -25,8 +25,10 @@ FROM NPC IMPORT InitNPCs, CheckNPCInteract, GetSpeech;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
                    GetTerrainAt;
-FROM Menu IMPORT HandleMenuKey, SetOptions;
+FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
+                 optionCount, MItems, GoMenu;
 FROM Music IMPORT SetMood, MoodDay, MoodNight, MoodIndoor;
+FROM Platform IMPORT PlayH, Scale, ScreenW;
 FROM Doors IMPORT InitDoors, CheckDoor;
 FROM WorldObj IMPORT CheckObjectPickup;
 
@@ -108,6 +110,60 @@ BEGIN
     SetOptions
   END
 END HandlePickup;
+
+PROCEDURE HandleMenuClick(mx, my: INTEGER);
+CONST
+  (* Menu position in screen pixels — must match Render.mod DrawMenu *)
+  Col0 = 645; Col1 = 723;
+  ColW = 72;
+  RowH = 14;
+  YOff = 12;
+VAR hudY, col, row, itemIdx, optIdx: INTEGER;
+BEGIN
+  hudY := PlayH * Scale;
+  (* Check if click is in menu area *)
+  IF my < hudY + YOff THEN RETURN END;
+  IF mx < Col0 THEN RETURN END;
+  IF mx >= Col1 + ColW THEN RETURN END;
+
+  (* Determine column *)
+  IF mx < Col1 THEN col := 0
+  ELSE col := 1
+  END;
+
+  (* Determine row *)
+  row := (my - hudY - YOff) DIV RowH;
+  IF row < 0 THEN RETURN END;
+  IF row > 5 THEN RETURN END;
+
+  (* Map to menu item index *)
+  itemIdx := row * 2 + col;
+  IF itemIdx >= optionCount THEN RETURN END;
+
+  optIdx := realOptions[itemIdx];
+  IF optIdx < 0 THEN RETURN END;
+
+  (* Tab items (0-4) switch menu mode *)
+  IF optIdx < 5 THEN
+    GoMenu(optIdx);
+    RETURN
+  END;
+
+  (* Sub-items: execute the action *)
+  CASE cmode OF
+    0: (* Items menu *)
+      CASE optIdx OF
+        5: ShowMessage("List...") |       (* List *)
+        6: HandleWorldPickup |            (* Take *)
+        7: ShowMessage("Look around...") | (* Look *)
+        8: ShowMessage("Use...") |         (* Use *)
+        9: ShowMessage("Give...")          (* Give *)
+      ELSE
+      END
+  ELSE
+    ShowMessage("Selected option")
+  END
+END HandleMenuClick;
 
 PROCEDURE HandleWorldPickup;
 VAR id: INTEGER;
@@ -318,6 +374,9 @@ BEGIN
   mapToggled := input.toggleMap;
   IF input.menuKey # 0C THEN
     HandleMenuKey(input.menuKey)
+  END;
+  IF input.mouseClick THEN
+    HandleMenuClick(input.mouseX, input.mouseY)
   END;
   UpdatePlayer;
   HandlePickup;

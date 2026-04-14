@@ -6,8 +6,8 @@ FROM Gfx IMPORT Init AS GfxInit, Quit AS GfxQuit,
                 CreateRenderer, DestroyRenderer,
                 Present, Ticks, Delay,
                 WIN_CENTERED, RENDER_ACCELERATED, RENDER_VSYNC;
-FROM Events IMPORT Poll, QUIT_EVENT, KEYDOWN, KeyCode,
-                   IsKeyPressed,
+FROM Events IMPORT Poll, QUIT_EVENT, KEYDOWN, MOUSEDOWN, KeyCode,
+                   IsKeyPressed, MouseX, MouseY, MouseButton,
                    SCAN_UP, SCAN_DOWN, SCAN_LEFT, SCAN_RIGHT,
                    SCAN_W, SCAN_A, SCAN_S, SCAN_D,
                    SCAN_SPACE, SCAN_P, SCAN_F, SCAN_T;
@@ -43,6 +43,7 @@ PROCEDURE PollInput(VAR inp: InputState);
 VAR evt, kc: INTEGER;
 BEGIN
   inp.menuKey := 0C;
+  inp.mouseClick := FALSE;
   LOOP
     evt := Poll();
     IF evt = 0 THEN EXIT END;
@@ -52,6 +53,12 @@ BEGIN
       IF kc = ORD('m') THEN inp.toggleMap := TRUE
       ELSIF (kc >= ORD('a')) AND (kc <= ORD('z')) THEN
         inp.menuKey := CAP(CHR(kc))
+      END
+    ELSIF evt = MOUSEDOWN THEN
+      IF MouseButton() = 1 THEN  (* left button *)
+        inp.mouseClick := TRUE;
+        inp.mouseX := MouseX();
+        inp.mouseY := MouseY()
       END
     END
   END;
