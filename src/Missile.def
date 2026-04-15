@@ -1,0 +1,35 @@
+DEFINITION MODULE Missile;
+
+(* Projectile system matching original FTA.
+   Arrows and wand bolts travel in a direction,
+   hit actors, and render from the objects sprite sheet. *)
+
+CONST
+  MaxMissiles = 6;
+
+TYPE
+  MissileRec = RECORD
+    absX, absY: INTEGER;
+    mtype:      INTEGER;  (* 0=inactive, 1=arrow, 2=wand bolt, 3=spent *)
+    timeOfFlight: INTEGER;
+    speed:      INTEGER;
+    direction:  INTEGER;
+    archer:     INTEGER   (* actor index who fired *)
+  END;
+
+VAR
+  missiles: ARRAY [0..5] OF MissileRec;
+  nextSlot: INTEGER;
+
+PROCEDURE InitMissiles;
+
+(* Fire a missile from the given actor *)
+PROCEDURE FireMissile(actorIdx: INTEGER);
+
+(* Update all active missiles — move, check hits *)
+PROCEDURE UpdateMissiles;
+
+(* Draw all active missiles *)
+PROCEDURE DrawMissiles;
+
+END Missile.

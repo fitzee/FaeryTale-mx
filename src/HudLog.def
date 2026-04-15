@@ -1,0 +1,37 @@
+DEFINITION MODULE HudLog;
+
+(* 4-line scrolling message log for HUD parchment area,
+   plus persistent stat strip below. Matches original FTA behavior. *)
+
+CONST
+  MaxLineLen = 40;
+  NumLines   = 4;
+
+VAR
+  logDirty:  BOOLEAN;  (* TRUE when log lines changed *)
+  statDirty: BOOLEAN;  (* TRUE when stats changed *)
+
+PROCEDURE InitHudLog;
+
+(* Insert a line into the log. Scrolls older lines up.
+   Long text is word-wrapped at ~37 columns, producing
+   multiple inserted lines. *)
+PROCEDURE AddLogLine(msg: ARRAY OF CHAR);
+
+(* Append text to the current bottom line without scrolling. *)
+PROCEDURE AppendToLine(msg: ARRAY OF CHAR);
+
+(* Update stat values. Only marks stat strip dirty. *)
+PROCEDURE SetStats(brv, lck, knd, wlth, vit: INTEGER);
+
+(* Access log lines for rendering (0 = topmost visible) *)
+PROCEDURE GetLine(row: INTEGER; VAR buf: ARRAY OF CHAR);
+
+(* Access current stat values *)
+PROCEDURE GetStatBrv(): INTEGER;
+PROCEDURE GetStatLck(): INTEGER;
+PROCEDURE GetStatKnd(): INTEGER;
+PROCEDURE GetStatWlth(): INTEGER;
+PROCEDURE GetStatVit(): INTEGER;
+
+END HudLog.

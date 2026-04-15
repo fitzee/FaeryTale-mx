@@ -105,6 +105,8 @@ BEGIN
   FOR i := 0 TO 3 DO tileTex[i] := NIL END;
   FOR i := 0 TO 3 DO tileOverlay[i] := NIL END;
   FOR i := 0 TO 2 DO brotherTex[i] := NIL END;
+  FOR i := 0 TO 4 DO enemyTex[i] := NIL END;
+  FOR i := 0 TO 4 DO npcTex[i] := NIL END;
   IF m2sys_file_exists(ADR("assets/hiscreen.bmp")) = 1 THEN
     Assign("assets/", basePath)
   ELSIF m2sys_file_exists(ADR("../../assets/hiscreen.bmp")) = 1 THEN
@@ -113,6 +115,12 @@ BEGIN
     Assign("assets/", basePath)
   END
 END InitAssets;
+
+PROCEDURE AssetPath(name: ARRAY OF CHAR; VAR result: ARRAY OF CHAR);
+BEGIN
+  Assign(basePath, result);
+  Concat(result, name, result)
+END AssetPath;
 
 PROCEDURE MakePath(prefix: ARRAY OF CHAR; num, digits: INTEGER;
                    ext: ARRAY OF CHAR);
@@ -277,7 +285,8 @@ BEGIN
   END;
 
   (* Load shadow mask PixBuf *)
-  shadowPB := PBLoadPNG("assets/shadow_mem.png", 256);
+  AssetPath("shadow_mem.png", pathBuf);
+  shadowPB := PBLoadPNG(pathBuf, 256);
   IF shadowPB = NIL THEN
     WriteString("*** Shadow mask failed ***"); WriteLn
   ELSE
@@ -285,13 +294,46 @@ BEGIN
   END;
 
   (* Load brother sprite sheets with magenta color key *)
-  brotherTex[0] := LoadBMPKeyedTexture("assets/julian.bmp", 255, 0, 255);
-  brotherTex[1] := LoadBMPKeyedTexture("assets/phillip.bmp", 255, 0, 255);
-  brotherTex[2] := LoadBMPKeyedTexture("assets/kevin.bmp", 255, 0, 255);
+  AssetPath("julian.bmp", pathBuf);
+  brotherTex[0] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("phillip.bmp", pathBuf);
+  brotherTex[1] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("kevin.bmp", pathBuf);
+  brotherTex[2] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
   IF brotherTex[0] = NIL THEN
     WriteString("*** Brother sprites failed ***"); WriteLn
   ELSE
     WriteString("Brother sprites loaded"); WriteLn
+  END;
+
+  (* Load enemy sprite sheets *)
+  AssetPath("shape_6_Ogre_16x32_x64.bmp", pathBuf);
+  enemyTex[0] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_7_Ghost_16x32_x64.bmp", pathBuf);
+  enemyTex[1] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_8_DKnight-Spiders_16x32_x64.bmp", pathBuf);
+  enemyTex[2] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_9_Necro-Farmer-Loraii_16x32_x64.bmp", pathBuf);
+  enemyTex[3] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_12_Snake-Salamander_16x32_x64.bmp", pathBuf);
+  enemyTex[4] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  IF enemyTex[0] # NIL THEN
+    WriteString("Enemy sprites loaded"); WriteLn
+  END;
+
+  (* Load NPC sprite sheets *)
+  AssetPath("shape_13_Wizard-Priest_16x32_x8.bmp", pathBuf);
+  npcTex[0] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_14_Royal-Set_16x32_x8.bmp", pathBuf);
+  npcTex[1] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_15_Bartender_16x32_x8.bmp", pathBuf);
+  npcTex[2] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_16_Witch_16x32_x8.bmp", pathBuf);
+  npcTex[3] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  AssetPath("shape_17_Ranger-Beggar_16x32_x8.bmp", pathBuf);
+  npcTex[4] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  IF npcTex[0] # NIL THEN
+    WriteString("NPC sprites loaded"); WriteLn
   END;
 
   WriteString("Done: "); WriteInt(cachedCount, 1);
@@ -389,10 +431,10 @@ BEGIN
 
   secx := (imx DIV 16) - rxr;
   IF (secx < 0) OR (secx >= 64) THEN
-    IF BAND(CARDINAL(secx), 32) = 0 THEN
+    IF BAND(CARDINAL(secx), 32) # 0 THEN
       secx := 0
     ELSE
-      secx := BAND(CARDINAL(secx), 63)
+      secx := 63
     END
   END;
   secy := (imy DIV 8) - ryr;
@@ -430,12 +472,13 @@ BEGIN
      secy = (imy/8) - yReg, then clamp to 0-31
      sec_num = secy*128 + secx + xReg *)
   secx := (imx DIV 16) - xReg;
-  (* Wrapping logic from original *)
+  (* Wrapping from original px_to_im asm:
+     if bit6 set (out of range): bit5=0 → 63, bit5=1 → 0 *)
   IF (secx < 0) OR (secx >= 64) THEN
-    IF BAND(CARDINAL(secx), 32) = 0 THEN
+    IF BAND(CARDINAL(secx), 32) # 0 THEN
       secx := 0
     ELSE
-      secx := BAND(CARDINAL(secx), 63)
+      secx := 63
     END
   END;
 
@@ -464,6 +507,36 @@ BEGIN
     RETURN ORD(sect032[offset])
   END
 END GetSectorByte;
+
+PROCEDURE GetMapSector(x, y: INTEGER): INTEGER;
+VAR imx, imy, secx, secy, offset, secNum: INTEGER;
+BEGIN
+  imx := x DIV TileW;
+  imy := y DIV TileH;
+  secx := (imx DIV 16) - xReg;
+  IF (secx < 0) OR (secx >= 64) THEN
+    IF BAND(CARDINAL(secx), 32) # 0 THEN
+      secx := 0
+    ELSE
+      secx := 63
+    END
+  END;
+  secy := (imy DIV 8) - yReg;
+  IF secy < 0 THEN secy := 0 END;
+  IF secy >= 32 THEN secy := 31 END;
+  offset := secy * 128 + secx + xReg;
+  IF (offset < 0) OR (offset >= MapSize) THEN RETURN 0 END;
+  CASE activeMap OF
+    0: secNum := ORD(map160[offset]) |
+    1: secNum := ORD(map168[offset]) |
+    2: secNum := ORD(map176[offset]) |
+    3: secNum := ORD(map184[offset]) |
+    4: secNum := ORD(map192[offset])
+  ELSE
+    secNum := 0
+  END;
+  RETURN secNum
+END GetMapSector;
 
 PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
 VAR secByte, cm, tilesMask, subBit: INTEGER;

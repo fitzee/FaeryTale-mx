@@ -1,0 +1,19 @@
+DEFINITION MODULE Narration;
+
+(* Lightweight place-triggered message system matching the original FTA.
+   Sector-range trigger tables select pre-written messages from
+   string tables. '%' expands to the current brother's name.
+   Messages are dispatched to the HUD parchment log. *)
+
+(* Call each frame with hero position and region.
+   Only emits a message when the effective place changes. *)
+(* Set initial place without printing a message *)
+PROCEDURE InitPlace(heroX, heroY, region: INTEGER);
+
+PROCEDURE UpdatePlace(heroX, heroY, region: INTEGER);
+
+(* Dispatch the Nth message from the event message table.
+   Used for status messages like hunger, drowning, etc. *)
+PROCEDURE Event(n: INTEGER);
+
+END Narration.

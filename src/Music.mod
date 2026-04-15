@@ -7,6 +7,7 @@ FROM Playback IMPORT DeviceID, InitAudio, QuitAudio,
                      QueueSamples, GetQueuedBytes, ClearQueued,
                      FormatS16;
 FROM BinaryIO IMPORT OpenRead, Close, ReadBytes;
+FROM Assets IMPORT AssetPath;
 FROM Storage IMPORT ALLOCATE, DEALLOCATE;
 FROM MathLib IMPORT sin;
 
@@ -204,20 +205,16 @@ BEGIN
   insMap[8]:=4; insMap[9]:=1284; insMap[10]:=256; insMap[11]:=1280
 END InitInsMap;
 
-PROCEDURE TryOpen(name1, name2: ARRAY OF CHAR; VAR fd: ADDRESS): BOOLEAN;
-BEGIN
-  OpenRead(name1, fd);
-  IF fd = NIL THEN OpenRead(name2, fd) END;
-  RETURN fd # NIL
-END TryOpen;
-
 PROCEDURE LoadData(): BOOLEAN;
 VAR fd: ADDRESS;
     n, i, off, packLen: INTEGER;
     buf4: ARRAY [0..3] OF CHAR;
+    p: ARRAY [0..127] OF CHAR;
 BEGIN
   (* Load waveforms *)
-  IF NOT TryOpen("assets/wavmem.bin", "../../assets/wavmem.bin", fd) THEN
+  AssetPath("wavmem.bin", p);
+  OpenRead(p, fd);
+  IF fd = NIL THEN
     WriteString("Music: wavmem.bin not found"); WriteLn;
     RETURN FALSE
   END;
@@ -231,7 +228,9 @@ BEGIN
   END;
 
   (* Load volume envelopes *)
-  IF NOT TryOpen("assets/volmem.bin", "../../assets/volmem.bin", fd) THEN
+  AssetPath("volmem.bin", p);
+  OpenRead(p, fd);
+  IF fd = NIL THEN
     WriteString("Music: volmem.bin not found"); WriteLn;
     RETURN FALSE
   END;
@@ -243,7 +242,9 @@ BEGIN
   END;
 
   (* Load songs/tracks *)
-  IF NOT TryOpen("assets/songs.bin", "../../assets/songs.bin", fd) THEN
+  AssetPath("songs.bin", p);
+  OpenRead(p, fd);
+  IF fd = NIL THEN
     WriteString("Music: songs.bin not found"); WriteLn;
     RETURN FALSE
   END;

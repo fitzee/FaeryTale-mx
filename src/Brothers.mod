@@ -4,27 +4,46 @@ FROM Strings IMPORT Assign;
 FROM Actor IMPORT actors;
 FROM World IMPORT TileSize;
 
+PROCEDURE ClearWeaponInv(VAR b: BrotherData);
+VAR i: INTEGER;
+BEGIN
+  FOR i := 0 TO 5 DO b.weaponInv[i] := 0 END
+END ClearWeaponInv;
+
 PROCEDURE InitBrothers;
 BEGIN
   activeBrother := Julian;
 
   Assign("Julian", brothers[Julian].name);
   brothers[Julian].vitality := 100;
-  brothers[Julian].weapon := 1;  (* dagger - the brave eldest *)
+  brothers[Julian].weapon := 1;
+  brothers[Julian].brave := 35;
+  brothers[Julian].luck := 20;
+  brothers[Julian].kind := 15;
+  ClearWeaponInv(brothers[Julian]);
+  brothers[Julian].weaponInv[1] := 1;  (* starts with dirk *)
   brothers[Julian].startX := 19036;
   brothers[Julian].startY := 15755;
   brothers[Julian].alive := TRUE;
 
   Assign("Philip", brothers[Philip].name);
   brothers[Philip].vitality := 80;
-  brothers[Philip].weapon := 0;  (* unarmed - the gentle middle *)
+  brothers[Philip].weapon := 0;
+  brothers[Philip].brave := 20;
+  brothers[Philip].luck := 35;
+  brothers[Philip].kind := 15;
+  ClearWeaponInv(brothers[Philip]);
   brothers[Philip].startX := 19036;
   brothers[Philip].startY := 15755;
   brothers[Philip].alive := TRUE;
 
   Assign("Kevin", brothers[Kevin].name);
   brothers[Kevin].vitality := 60;
-  brothers[Kevin].weapon := 0;  (* unarmed - the youngest *)
+  brothers[Kevin].weapon := 0;
+  brothers[Kevin].brave := 15;
+  brothers[Kevin].luck := 20;
+  ClearWeaponInv(brothers[Kevin]);
+  brothers[Kevin].kind := 35;
   brothers[Kevin].startX := 19036;
   brothers[Kevin].startY := 15755;
   brothers[Kevin].alive := TRUE

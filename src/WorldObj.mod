@@ -5,7 +5,7 @@ FROM Platform IMPORT ren, Scale, PlayW, PlayH, DrawTexRegion,
                     LoadBMPKeyedTexture;
 FROM Canvas IMPORT SetClip, ClearClip;
 FROM World IMPORT camX, camY;
-FROM Assets IMPORT currentRegion;
+FROM Assets IMPORT currentRegion, AssetPath;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -118,6 +118,22 @@ BEGIN
   AddObj(11936, 36207, 20, 1, 8);    (* scrap/note *)
   AddObj( 9674, 35687, 14, 1, 8);    (* urn *)
 
+  (* === Region 8 — Hidden 'look' items (ob_stat=5) === *)
+  AddObj( 3872, 33546, 25, 5, 8);    (* gold key *)
+  AddObj( 3887, 33510, 23, 5, 8);    (* totem *)
+  AddObj( 4495, 33510, 22, 5, 8);    (* vial *)
+  AddObj( 3327, 33383, 24, 5, 8);    (* jade skull *)
+  AddObj( 4221, 34119, 11, 5, 8);    (* quiver *)
+  AddObj( 7610, 33604, 22, 5, 8);    (* vial *)
+  AddObj( 7616, 33522, 13, 5, 8);    (* money *)
+  AddObj( 9570, 35768, 18, 5, 8);    (* blue stone *)
+  AddObj( 9668, 35769, 11, 5, 8);    (* quiver *)
+  AddObj( 9553, 38951, 17, 5, 8);    (* gold ring *)
+  AddObj(10062, 39005, 24, 5, 8);    (* jade skull *)
+  AddObj(10577, 38951, 22, 5, 8);    (* vial *)
+  AddObj(11062, 39514, 13, 5, 8);    (* money *)
+  AddObj( 8845, 39494,154, 5, 8);    (* white key *)
+
   (* === Region 9 — Underground === *)
   AddObj( 7540, 38528, 145, 1, 9);   (* magic wand *)
   AddObj( 9624, 36559, 145, 1, 9);   (* magic wand *)
@@ -134,8 +150,10 @@ BEGIN
 END InitWorldObjects;
 
 PROCEDURE LoadObjectSprites;
+VAR p: ARRAY [0..127] OF CHAR;
 BEGIN
-  objTex := LoadBMPKeyedTexture("assets/objects.bmp", 255, 0, 255);
+  AssetPath("objects.bmp", p);
+  objTex := LoadBMPKeyedTexture(p, 255, 0, 255);
   IF objTex = NIL THEN
     WriteString("World: object sprites failed"); WriteLn
   ELSE

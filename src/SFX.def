@@ -1,0 +1,18 @@
+DEFINITION MODULE SFX;
+
+(* One-shot sound effects matching original FTA.
+   6 samples: melee hit, sword clang, arrow hit, enemy hit, bow fire, wand fire. *)
+
+CONST
+  SfxPlayerHit = 0;
+  SfxSwordClang = 1;
+  SfxArrowHit  = 2;
+  SfxEnemyHit  = 3;
+  SfxBowFire   = 4;
+  SfxWandFire  = 5;
+
+PROCEDURE InitSFX(): BOOLEAN;
+PROCEDURE PlayEffect(num: INTEGER);
+PROCEDURE ShutdownSFX;
+
+END SFX.

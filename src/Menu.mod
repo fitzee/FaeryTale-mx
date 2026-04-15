@@ -4,6 +4,7 @@ FROM Strings IMPORT Assign;
 FROM Items IMPORT InventoryCount,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
+FROM Brothers IMPORT brothers, activeBrother;
 
 (* Category tab labels — always shown as top 5 in each menu *)
 CONST
@@ -169,15 +170,33 @@ END StuffFlag;
 PROCEDURE SetOptions;
 VAR hasAnyKey: INTEGER;
 BEGIN
-  (* USE menu: slots 0-6 are weapons/tools, 7=Keys, 8=Sun Stone
-     Our simplified mapping:
-       0=Dirk (always have), 1=Mace, 2=Sword, 3=Bow,
-       4=Wand, 5=Lasso, 6=Shell, 7=Key, 8=Sun *)
-  menus[MUse].enabled[0] := 10;  (* Dirk — always have *)
-  menus[MUse].enabled[1] := 8;   (* Mace — not in our item system yet *)
-  menus[MUse].enabled[2] := StuffFlag(ItemSword);
-  menus[MUse].enabled[3] := 8;   (* Bow — not yet *)
-  menus[MUse].enabled[4] := 8;   (* Wand — not yet *)
+  (* USE menu: slots 0-4 are weapons, 5-6 tools, 7=Keys, 8=Sun.
+     Original: hit+1 = weapon code. Bright if owned. *)
+  IF brothers[activeBrother].weaponInv[1] > 0 THEN
+    menus[MUse].enabled[0] := 10
+  ELSE
+    menus[MUse].enabled[0] := 8
+  END;
+  IF brothers[activeBrother].weaponInv[2] > 0 THEN
+    menus[MUse].enabled[1] := 10
+  ELSE
+    menus[MUse].enabled[1] := 8
+  END;
+  IF brothers[activeBrother].weaponInv[3] > 0 THEN
+    menus[MUse].enabled[2] := 10
+  ELSE
+    menus[MUse].enabled[2] := 8
+  END;
+  IF brothers[activeBrother].weaponInv[4] > 0 THEN
+    menus[MUse].enabled[3] := 10
+  ELSE
+    menus[MUse].enabled[3] := 8
+  END;
+  IF brothers[activeBrother].weaponInv[5] > 0 THEN
+    menus[MUse].enabled[4] := 10
+  ELSE
+    menus[MUse].enabled[4] := 8
+  END;
   menus[MUse].enabled[5] := 8;   (* Lasso — not yet *)
   menus[MUse].enabled[6] := 8;   (* Shell — not yet *)
   (* Keys: enabled if player has any key *)

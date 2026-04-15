@@ -16,6 +16,7 @@ VAR
 VAR
   mapToggled: BOOLEAN;
   regionFade: INTEGER;  (* >0 = fading during region switch *)
+  viewStatus: INTEGER;  (* 0=normal, 4=inventory display *)
 
 PROCEDURE InitGame;
 PROCEDURE UpdateGame;

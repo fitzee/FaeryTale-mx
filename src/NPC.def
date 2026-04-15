@@ -1,24 +1,35 @@
 DEFINITION MODULE NPC;
 
-(* Pure Modula-2 NPC system.
-   NPCs are non-hostile actors that can speak when approached. *)
+(* NPC / set-figure system matching original FTA.
+   NPCs are map-backed set figures that materialize as
+   SETFIG actors when near the player. *)
 
 CONST
-  MaxNPCs = 8;
+  MaxNPCs    = 14;  (* setfig table size *)
+  MaxSpeeches = 50;
 
-TYPE
-  NPCData = RECORD
-    actorIdx: INTEGER;
-    speechIdx: INTEGER;
-    hasSpoken: BOOLEAN
-  END;
-
-VAR
-  npcs: ARRAY [0..7] OF NPCData;
-  npcCount: INTEGER;
+(* Get sprite bank and frame for a setfig race *)
+PROCEDURE GetSetfigSprite(race: INTEGER; VAR bank, frame: INTEGER);
 
 PROCEDURE InitNPCs;
-PROCEDURE CheckNPCInteract(playerX, playerY: INTEGER): INTEGER;
-PROCEDURE GetSpeech(speechIdx: INTEGER; VAR text: ARRAY OF CHAR);
+
+(* Materialize nearby status=3 WorldObj entries as live SETFIG actors.
+   Call each frame after camera/region updates. *)
+PROCEDURE MaterializeNPCs(heroX, heroY, region: INTEGER);
+
+(* Find nearest talkable NPC within range. Returns actor index or -1. *)
+PROCEDURE FindNearestNPC(heroX, heroY: INTEGER): INTEGER;
+
+(* Get speech text for an NPC by speech index. *)
+PROCEDURE GetSpeech(idx: INTEGER; VAR text: ARRAY OF CHAR);
+
+(* Describe nearest NPC for LOOK command. *)
+PROCEDURE LookAtNPC(heroX, heroY: INTEGER; VAR desc: ARRAY OF CHAR): BOOLEAN;
+
+(* Talk to nearest NPC. Returns TRUE if someone responded. *)
+PROCEDURE TalkToNPC(heroX, heroY: INTEGER; VAR speech: ARRAY OF CHAR): BOOLEAN;
+
+(* Get NPC name by race for display *)
+PROCEDURE NpcName(race: INTEGER; VAR name: ARRAY OF CHAR);
 
 END NPC.

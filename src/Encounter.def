@@ -1,0 +1,27 @@
+DEFINITION MODULE Encounter;
+
+(* Enemy encounter system matching original FTA.
+   Extent regions trigger spawns based on player position.
+   Encounter chart defines enemy stats per race. *)
+
+CONST
+  MaxExtents   = 23;
+  MaxEncounter = 11;
+
+(* Current extent info — set by UpdateExtent *)
+VAR
+  curExtent: INTEGER;   (* index into extent list, or -1 *)
+  xtype:     INTEGER;   (* current extent encounter type *)
+
+PROCEDURE InitEncounters;
+
+(* Call each frame: detect extent, possibly spawn enemies *)
+PROCEDURE UpdateEncounters(heroX, heroY, region: INTEGER);
+
+(* Spawn a specific encounter group near the player *)
+PROCEDURE SpawnGroup(heroX, heroY, race, count, spread: INTEGER);
+
+(* TRUE if any living enemy is within 300px of hero *)
+PROCEDURE EnemiesNearby(heroX, heroY: INTEGER): BOOLEAN;
+
+END Encounter.

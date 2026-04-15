@@ -12,6 +12,7 @@ CONST
   TerrainSize = 512;
   TileW       = 16;
   TileH       = 32;
+  MaxPathLen  = 127;
 
 TYPE
   RegionDef = RECORD
@@ -35,7 +36,12 @@ VAR
   shadowPB: ADDRESS;                     (* shadow_mem mask PixBuf *)
   hudTex:  ADDRESS;
   brotherTex: ARRAY [0..2] OF ADDRESS;  (* Julian=0, Phillip=1, Kevin=2 *)
+  enemyTex: ARRAY [0..4] OF ADDRESS;   (* 0=Ogre, 1=Ghost, 2=DKnight, 3=Necro, 4=Snake *)
+  npcTex: ARRAY [0..4] OF ADDRESS;     (* 0=Wizard, 1=Royal, 2=Bartender, 3=Witch, 4=Ranger *)
   xReg, yReg: INTEGER;
+
+(* Build full path: basePath + filename → result *)
+PROCEDURE AssetPath(name: ARRAY OF CHAR; VAR result: ARRAY OF CHAR);
 
 PROCEDURE LoadImgCached(num: INTEGER): ADDRESS;
 PROCEDURE InitAssets;
@@ -43,6 +49,7 @@ PROCEDURE PreloadAll(): BOOLEAN;
 PROCEDURE LoadHUD(targetW, targetH: INTEGER): BOOLEAN;
 PROCEDURE SwitchRegion(regionIdx: INTEGER);
 PROCEDURE GetSectorByte(x, y: INTEGER): INTEGER;
+PROCEDURE GetMapSector(x, y: INTEGER): INTEGER;
 PROCEDURE GetSectorByteForRegion(x, y, regIdx: INTEGER): INTEGER;
 PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
 PROCEDURE GetMaskType(secByte: INTEGER): INTEGER;

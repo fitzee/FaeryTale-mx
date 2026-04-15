@@ -13,7 +13,7 @@ FROM Movement IMPORT MoveActor;
 FROM EnemyAI IMPORT UpdateEnemies;
 FROM Combat IMPORT UpdateCombat;
 FROM Items IMPORT InitItems, CheckPickup, UseItem, InventoryCount,
-                  SpawnItem,
+                  AddToInventory, SpawnItem,
                   ItemNone, ItemGold, ItemFood, ItemPotion,
                   ItemSword, ItemKey, ItemGem, ItemShield, ItemScroll;
 FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
@@ -21,16 +21,23 @@ FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
                      activeBrother;
-FROM NPC IMPORT InitNPCs, CheckNPCInteract, GetSpeech;
+FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
                    GetTerrainAt;
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
-                 optionCount, MItems, GoMenu;
-FROM Music IMPORT SetMood, MoodDay, MoodNight, MoodIndoor;
+                 optionCount, MItems, MGame, GoMenu,
+                 PanelX, PanelY, BtnW, BtnH;
+FROM Music IMPORT SetMood, StopMusic, MoodDay, MoodNight, MoodIndoor,
+                  MoodBattle;
 FROM Platform IMPORT PlayH, Scale, ScreenW;
 FROM Doors IMPORT InitDoors, CheckDoor;
-FROM WorldObj IMPORT CheckObjectPickup;
+FROM WorldObj IMPORT CheckObjectPickup, objects, objCount;
+FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
+FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
+FROM Combat IMPORT SearchBody;
+FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
+FROM Narration IMPORT InitPlace, UpdatePlace, Event;
 
 VAR
   input: InputState;
@@ -39,6 +46,8 @@ VAR
   prevRegion: INTEGER;
   deathTimer: INTEGER;
   doorCooldown: INTEGER;
+  battleFlag: BOOLEAN;
+  prevBattle: BOOLEAN;
   nameBuf: ARRAY [0..31] OF CHAR;
   msgBuf: ARRAY [0..63] OF CHAR;
 
@@ -46,13 +55,16 @@ PROCEDURE InitGame;
 BEGIN
   running := TRUE;
   cycle := 0;
-  dayNight := 0;
+  dayNight := 6000;  (* midday — full bright, matching DayNight.InitDayNight *)
   msgTimer := 0;
   msgText[0] := 0C;
   potionCooldown := 0;
   hungerTimer := 0;
   deathTimer := 0;
   doorCooldown := 0;
+  battleFlag := FALSE;
+  prevBattle := FALSE;
+  viewStatus := 0;
 
   InitWorld;
   InitAll;
@@ -60,6 +72,10 @@ BEGIN
   InitDayNight;
   InitBrothers;
   InitDoors;
+  InitHudLog;
+  InitNPCs;
+  InitEncounters;
+  InitMissiles;
 
   (* Place player from active brother data *)
   RestoreBrotherState;
@@ -76,16 +92,39 @@ BEGIN
     SwitchRegion(3);
     actors[0].absX := 19036;
     actors[0].absY := 15755;
-    ShowMessage("Welcome to the Faery Tale!")
+    InitPlace(actors[0].absX, actors[0].absY, 3);
+    Event(9);   (* "Julian started the journey in his home village of Tambry" *)
+    Event(30)   (* "It was midday." *)
   ELSE
     ShowMessage("Welcome! (placeholder mode)")
   END
 END InitGame;
 
 PROCEDURE ShowMessage(msg: ARRAY OF CHAR);
+VAR buf: ARRAY [0..79] OF CHAR;
+    si, di, ni: INTEGER;
+    name: ARRAY [0..15] OF CHAR;
 BEGIN
-  Assign(msg, msgText);
-  msgTimer := 180
+  (* Expand '%' to current brother name *)
+  ActiveName(name);
+  si := 0; di := 0;
+  WHILE (si <= HIGH(msg)) AND (msg[si] # 0C) AND (di < 79) DO
+    IF msg[si] = '%' THEN
+      ni := 0;
+      WHILE (ni <= HIGH(name)) AND (name[ni] # 0C) AND (di < 79) DO
+        buf[di] := name[ni];
+        INC(di); INC(ni)
+      END;
+      INC(si)
+    ELSE
+      buf[di] := msg[si];
+      INC(di); INC(si)
+    END
+  END;
+  buf[di] := 0C;
+  Assign(buf, msgText);
+  msgTimer := 180;
+  AddLogLine(buf)
 END ShowMessage;
 
 PROCEDURE HandlePickup;
@@ -111,28 +150,88 @@ BEGIN
   END
 END HandlePickup;
 
+PROCEDURE ShowInventory;
+BEGIN
+  viewStatus := 4
+END ShowInventory;
+
+PROCEDURE HandleLook;
+VAR i, dx, dy, found: INTEGER;
+BEGIN
+  (* Original: search for hidden objects (status=0 or status=5) within
+     distance 40 and reveal them (set status=1 = visible/pickupable).
+     status=5 = "look-only" items hidden in fireplaces, cabinets etc. *)
+  found := 0;
+  FOR i := 0 TO objCount - 1 DO
+    IF ((objects[i].status = 0) OR (objects[i].status = 5)) AND
+       ((objects[i].region = currentRegion) OR
+        (objects[i].region = -1)) THEN
+      dx := actors[0].absX - objects[i].x;
+      dy := actors[0].absY - objects[i].y;
+      IF (dx > -40) AND (dx < 40) AND (dy > -40) AND (dy < 40) THEN
+        objects[i].status := 1;
+        found := 1
+      END
+    END
+  END;
+  IF found > 0 THEN
+    Event(38)  (* "% discovered a hidden object." *)
+  ELSE
+    (* No hidden objects — describe nearest NPC if any *)
+    IF LookAtNPC(actors[0].absX, actors[0].absY, nameBuf) THEN
+      Assign("% sees ", msgBuf);
+      Concat(msgBuf, nameBuf, msgBuf);
+      Concat(msgBuf, ".", msgBuf);
+      ShowMessage(msgBuf)
+    ELSE
+      Event(20)  (* "% looked around but discovered nothing." *)
+    END
+  END
+END HandleLook;
+
+PROCEDURE TogglePause;
+BEGIN
+  (* Toggle bit 0 of menus[GAME].enabled[5], matching original XOR toggle *)
+  IF BAND(CARDINAL(menus[MGame].enabled[5]), 1) = 0 THEN
+    menus[MGame].enabled[5] := BOR(INTEGER(CARDINAL(menus[MGame].enabled[5])), 1);
+    ShowMessage("Game paused.")
+  ELSE
+    menus[MGame].enabled[5] := BAND(CARDINAL(menus[MGame].enabled[5]), 14);
+    ShowMessage("Game resumed.")
+  END
+END TogglePause;
+
+PROCEDURE ToggleMusic;
+BEGIN
+  (* Toggle bit 0 of menus[GAME].enabled[6], then setmood *)
+  IF BAND(CARDINAL(menus[MGame].enabled[6]), 1) = 0 THEN
+    menus[MGame].enabled[6] := BOR(INTEGER(CARDINAL(menus[MGame].enabled[6])), 1);
+    SetMood(MoodDay)
+  ELSE
+    menus[MGame].enabled[6] := BAND(CARDINAL(menus[MGame].enabled[6]), 14);
+    StopMusic
+  END
+END ToggleMusic;
+
 PROCEDURE HandleMenuClick(mx, my: INTEGER);
 CONST
-  (* Menu position in screen pixels — must match Render.mod DrawMenu *)
-  Col0 = 645; Col1 = 723;
-  ColW = 72;
-  RowH = 14;
-  YOff = 12;
-VAR hudY, col, row, itemIdx, optIdx: INTEGER;
+  (* Original propt() layout in 640x57 HUD space:
+     Col0=430, Col1=482, each 48px wide (6*8), row = (j/2)*9 + 8. *)
+  HudW = 640;
+VAR hx, hy, col, row, itemIdx, optIdx: INTEGER;
 BEGIN
-  hudY := PlayH * Scale;
-  (* Check if click is in menu area *)
-  IF my < hudY + YOff THEN RETURN END;
-  IF mx < Col0 THEN RETURN END;
-  IF mx >= Col1 + ColW THEN RETURN END;
+  (* Convert screen mouse coords to 640x57 HUD space *)
+  hx := mx * HudW DIV (ScreenW * Scale);
+  hy := (my - PlayH * Scale) DIV Scale;
 
-  (* Determine column *)
-  IF mx < Col1 THEN col := 0
-  ELSE col := 1
-  END;
+  (* Check if click is in menu panel *)
+  IF hy < PanelY THEN RETURN END;
+  IF hx < PanelX THEN RETURN END;
+  IF hx >= PanelX + BtnW * 2 THEN RETURN END;
 
-  (* Determine row *)
-  row := (my - hudY - YOff) DIV RowH;
+  (* Determine column and row relative to panel *)
+  col := (hx - PanelX) DIV BtnW;
+  row := (hy - PanelY) DIV BtnH;
   IF row < 0 THEN RETURN END;
   IF row > 5 THEN RETURN END;
 
@@ -149,21 +248,140 @@ BEGIN
     RETURN
   END;
 
-  (* Sub-items: execute the action *)
+  (* Sub-items: execute the action based on current menu mode *)
   CASE cmode OF
     0: (* Items menu *)
       CASE optIdx OF
-        5: ShowMessage("List...") |       (* List *)
-        6: HandleWorldPickup |            (* Take *)
-        7: ShowMessage("Look around...") | (* Look *)
-        8: ShowMessage("Use...") |         (* Use *)
-        9: ShowMessage("Give...")          (* Give *)
+        5: ShowInventory |               (* List *)
+        6: HandleWorldPickup |           (* Take *)
+        7: HandleLook |                  (* Look *)
+        8: GoMenu(8) |                   (* Use → USE menu *)
+        9: GoMenu(7)                     (* Give → GIVE menu *)
       ELSE
+      END |
+    2: (* Talk menu *)
+      CASE optIdx OF
+        5: ShowMessage("You yell loudly!") |   (* Yell *)
+        6: HandleTalk |                         (* Say *)
+        7: ShowMessage("You ask around...")     (* Ask *)
+      ELSE
+      END |
+    4: (* Game menu *)
+      CASE optIdx OF
+        5: TogglePause |     (* Pause *)
+        6: ToggleMusic |     (* Music *)
+        7: (* Sound toggle — not yet *) |
+        8: running := FALSE | (* Quit *)
+        9: ShowMessage("Load not implemented")  (* Load *)
+      ELSE
+      END |
+    8: (* Use menu — weapon equipping.
+          Original: hit < 5 → weapon = hit+1 if owned *)
+      IF optIdx < 10 THEN
+        (* optIdx 5-9 maps to USE menu items 0-4 = weapon codes 1-5 *)
+        IF (optIdx >= 5) AND (optIdx <= 9) THEN
+          IF brothers[activeBrother].weaponInv[optIdx - 4] > 0 THEN
+            actors[0].weapon := optIdx - 4;
+            WeaponName(optIdx - 4, nameBuf);
+            Assign("Equipped ", msgBuf);
+            Concat(msgBuf, nameBuf, msgBuf);
+            Concat(msgBuf, ".", msgBuf);
+            ShowMessage(msgBuf)
+          ELSE
+            ShowMessage("You don't have one.")
+          END;
+          GoMenu(0)  (* return to Items menu *)
+        END
       END
   ELSE
-    ShowMessage("Selected option")
   END
 END HandleMenuClick;
+
+PROCEDURE WeaponName(w: INTEGER; VAR name: ARRAY OF CHAR);
+BEGIN
+  CASE w OF
+    1: Assign("a dagger", name) |
+    2: Assign("a mace", name) |
+    3: Assign("a sword", name) |
+    4: Assign("a bow", name) |
+    5: Assign("a wand", name)
+  ELSE
+    Assign("a weapon", name)
+  END
+END WeaponName;
+
+PROCEDURE SearchNearbyCorpses;
+VAR i, dx, dy, w: INTEGER;
+    wname: ARRAY [0..15] OF CHAR;
+BEGIN
+  FOR i := 1 TO actorCount - 1 DO
+    IF actors[i].state = StDead THEN
+      dx := actors[0].absX - actors[i].absX;
+      dy := actors[0].absY - actors[i].absY;
+      IF dx < 0 THEN dx := -dx END;
+      IF dy < 0 THEN dy := -dy END;
+      IF (dx < 20) AND (dy < 20) THEN
+        w := SearchBody(i);
+        IF w > 0 THEN
+          IF (w >= 1) AND (w <= 5) THEN
+            INC(brothers[activeBrother].weaponInv[w]);
+            WeaponName(w, wname);
+            Assign("Found ", msgBuf);
+            Concat(msgBuf, wname, msgBuf);
+            Concat(msgBuf, "!", msgBuf);
+            ShowMessage(msgBuf);
+            IF w > actors[0].weapon THEN
+              actors[0].weapon := w;
+              Assign("Equipped ", msgBuf);
+              Concat(msgBuf, wname, msgBuf);
+              Concat(msgBuf, ".", msgBuf);
+              ShowMessage(msgBuf)
+            END
+          END;
+          SetOptions;
+          RETURN
+        ELSE
+          ShowMessage("The body was empty.")
+        END;
+        RETURN
+      END
+    END
+  END;
+  ShowMessage("Nothing to take.")
+END SearchNearbyCorpses;
+
+PROCEDURE ContainerLoot;
+(* Original: rand4() for 0-3 items from containers.
+   Matching original container interaction. *)
+VAR roll, item: INTEGER;
+BEGIN
+  roll := (cycle * 1103515245 + 12345) DIV 65536;
+  IF roll < 0 THEN roll := -roll END;
+  roll := roll MOD 4;
+  IF roll = 0 THEN
+    ShowMessage("It was empty.")
+  ELSE
+    (* Give gold + random item *)
+    AddToInventory(ItemGold);
+    ShowMessage("Found some gold!");
+    IF roll >= 2 THEN
+      AddToInventory(ItemFood);
+      ShowMessage("Found some food!")
+    END;
+    IF roll >= 3 THEN
+      item := (cycle MOD 4) + 3;  (* key, sword, shield, or potion *)
+      AddToInventory(item);
+      CASE item OF
+        3: ShowMessage("Found a key!") |
+        4: ShowMessage("Found a sword!") |
+        5: ShowMessage("Found a shield!") |
+        6: ShowMessage("Found a potion!")
+      ELSE
+        ShowMessage("Found something!")
+      END
+    END
+  END
+END ContainerLoot;
 
 PROCEDURE HandleWorldPickup;
 VAR id: INTEGER;
@@ -171,42 +389,70 @@ BEGIN
   id := CheckObjectPickup(actors[0].absX, actors[0].absY);
   IF id >= 0 THEN
     CASE id OF
-      13: ShowMessage("Found gold!") |
-      14: ShowMessage("Found an urn!") |
-      15: ShowMessage("Found a chest!") |
-      16: ShowMessage("Found some sacks!") |
-      17: ShowMessage("Found a gold ring!") |
-      18: ShowMessage("Found a blue stone!") |
-      19: ShowMessage("Found a gold jewel!") |
-      20: ShowMessage("Found a scrap of paper!") |
-      22: ShowMessage("Found a vial!") |
-      23: ShowMessage("Found a totem!") |
-      24: ShowMessage("Found a skull!") |
-      25: ShowMessage("Found a gold key!") |
-      26: ShowMessage("Found a grey key!") |
+      13:
+        ShowMessage("Found 50 gold pieces!");
+        AddToInventory(ItemGold);
+        AddToInventory(ItemGold) |
+      14: (* urn — container *)
+        ShowMessage("Opened a brass urn.");
+        ContainerLoot |
+      15: (* chest — container *)
+        ShowMessage("Opened a chest.");
+        ContainerLoot |
+      16: (* sacks — container *)
+        ShowMessage("Opened some sacks.");
+        ContainerLoot |
+      17: ShowMessage("Found a gold ring!");
+          AddToInventory(ItemShield) |     (* reuse Shield slot for ring *)
+      18: ShowMessage("Found a blue stone!");
+          AddToInventory(ItemGem) |
+      19: ShowMessage("Found a gold jewel!");
+          AddToInventory(ItemGem) |
+      20: ShowMessage("Found a scrap of paper!");
+          AddToInventory(ItemScroll) |
+      22: ShowMessage("Found a vial!");
+          AddToInventory(ItemPotion) |
+      23: ShowMessage("Found a totem!");
+          AddToInventory(ItemScroll) |
+      24: ShowMessage("Found a skull!");
+          AddToInventory(ItemScroll) |
+      25: ShowMessage("Found a gold key!");
+          AddToInventory(ItemKey) |
+      26: ShowMessage("Found a grey key!");
+          AddToInventory(ItemKey) |
      102: ShowMessage("Found a turtle!") |
-     114: ShowMessage("Found a blue key!") |
-     145: ShowMessage("Found a magic wand!") |
-     148: ShowMessage("Found some fruit!") |
-     149: ShowMessage("Found a gold statue!") |
-     151: ShowMessage("Found a shell!") |
-     153: ShowMessage("Found a green key!") |
-     154: ShowMessage("Found a white key!") |
-     242: ShowMessage("Found a red key!")
+     114: ShowMessage("Found a blue key!");
+          AddToInventory(ItemKey) |
+     145: ShowMessage("Found a magic wand!");
+          brothers[activeBrother].weaponInv[5] := 1 |
+     148: ShowMessage("Found some fruit!");
+          AddToInventory(ItemFood) |
+     149: ShowMessage("Found a gold statue!");
+          AddToInventory(ItemGold);
+          AddToInventory(ItemGold);
+          AddToInventory(ItemGold) |
+     151: ShowMessage("Found a shell!");
+          AddToInventory(ItemShield) |
+     153: ShowMessage("Found a green key!");
+          AddToInventory(ItemKey) |
+     154: ShowMessage("Found a white key!");
+          AddToInventory(ItemKey) |
+     242: ShowMessage("Found a red key!");
+          AddToInventory(ItemKey)
     ELSE
       ShowMessage("Found something!")
     END;
     SetOptions
+  ELSE
+    (* No world object found — try searching dead enemy corpses *)
+    SearchNearbyCorpses
   END
 END HandleWorldPickup;
 
 PROCEDURE HandleTalk;
-VAR npcIdx: INTEGER;
-    speech: ARRAY [0..63] OF CHAR;
+VAR speech: ARRAY [0..127] OF CHAR;
 BEGIN
-  npcIdx := CheckNPCInteract(actors[0].absX, actors[0].absY);
-  IF npcIdx >= 0 THEN
-    GetSpeech(npcIdx, speech);
+  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN
     ShowMessage(speech)
   ELSE
     ShowMessage("Nobody to talk to here.")
@@ -316,10 +562,29 @@ BEGIN
   END;
 
   IF input.attack THEN
-    actors[0].state := StFighting
+    (* Ranged weapons (bow=4, wand=5) fire projectiles *)
+    IF (actors[0].weapon >= 4) AND (actors[0].state # StShoot1) THEN
+      actors[0].state := StShoot1;
+      FireMissile(0);
+      actors[0].velX := 0;
+      actors[0].velY := 0
+    ELSIF actors[0].weapon >= 4 THEN
+      (* Already shooting — hold state *)
+      actors[0].velX := 0;
+      actors[0].velY := 0
+    ELSE
+      (* Melee weapons *)
+      actors[0].state := StFighting;
+      actors[0].velX := 0;
+      actors[0].velY := 0
+    END
+  ELSIF (actors[0].state = StFighting) OR (actors[0].state = StShoot1) THEN
+    actors[0].state := StStill;
+    actors[0].velX := 0;
+    actors[0].velY := 0
   ELSIF input.dirKey # DirNone THEN
     actors[0].facing := input.dirKey;
-    IF MoveActor(0, input.dirKey, 2) THEN
+    IF MoveActor(0, input.dirKey, 1) THEN
       actors[0].state := StWalking
     ELSE
       actors[0].state := StStill
@@ -338,12 +603,16 @@ BEGIN
     DEC(doorCooldown);
     RETURN
   END;
-  (* Only check outdoor doors when standing on a door tile (terrain 15),
-     matching original which triggers doorfind on proxcheck==15.
-     Indoor exits always check. *)
-  IF (currentRegion < 8) AND
-     (GetTerrainAt(actors[0].absX, actors[0].absY) # 15) THEN
-    RETURN
+  (* Only check outdoor doors when near a door tile (terrain 15).
+     Check hero position and adjacent points to catch nearby doors. *)
+  IF currentRegion < 8 THEN
+    IF (GetTerrainAt(actors[0].absX, actors[0].absY) # 15) AND
+       (GetTerrainAt(actors[0].absX + 4, actors[0].absY) # 15) AND
+       (GetTerrainAt(actors[0].absX - 4, actors[0].absY) # 15) AND
+       (GetTerrainAt(actors[0].absX, actors[0].absY + 4) # 15) AND
+       (GetTerrainAt(actors[0].absX, actors[0].absY - 4) # 15) THEN
+      RETURN
+    END
   END;
   IF CheckDoor(actors[0].absX, actors[0].absY, currentRegion,
                newX, newY, newReg) THEN
@@ -355,8 +624,7 @@ BEGIN
       (* Exiting indoor — force detect outdoor region *)
       SwitchRegion(DetectRegion(newX, newY))
     END;
-    doorCooldown := 60;  (* ~1 second cooldown *)
-    ShowMessage("You enter...")
+    doorCooldown := 60  (* ~1 second cooldown *)
   END
 END CheckDoors;
 
@@ -371,6 +639,17 @@ BEGIN
   input.toggleMap := FALSE;
 
   PollInput(input);
+
+  (* Inventory display: any key/click dismisses *)
+  IF viewStatus = 4 THEN
+    IF input.quit THEN running := FALSE; RETURN END;
+    IF input.attack OR (input.menuKey # 0C) OR
+       input.mouseClick OR (input.dirKey # DirNone) THEN
+      viewStatus := 0
+    END;
+    RETURN
+  END;
+
   mapToggled := input.toggleMap;
   IF input.menuKey # 0C THEN
     HandleMenuKey(input.menuKey)
@@ -378,13 +657,20 @@ BEGIN
   IF input.mouseClick THEN
     HandleMenuClick(input.mouseX, input.mouseY)
   END;
+  IF input.quit THEN running := FALSE; RETURN END;
+
+  (* Pause: original checks menus[GAME].enabled[5] & 1, skips all updates *)
+  IF BAND(CARDINAL(menus[MGame].enabled[5]), 1) # 0 THEN
+    IF msgTimer > 0 THEN DEC(msgTimer) END;
+    RETURN
+  END;
+
   UpdatePlayer;
-  HandlePickup;
-  HandleWorldPickup;
   CheckEnvironment;
-  CheckEnemyDrops;
   UpdateEnemies;
   UpdateCombat;
+  UpdateEncounters(actors[0].absX, actors[0].absY, currentRegion);
+  UpdateMissiles;
   (* Check for door entry/exit *)
   CheckDoors;
 
@@ -393,18 +679,29 @@ BEGIN
   prevRegion := currentRegion;
   (* Original uses camera position (map_x/map_y) for region detection *)
   CheckRegionSwitch(camX, camY);
+
+  (* Place narration — sector-triggered arrival messages *)
+  UpdatePlace(actors[0].absX, actors[0].absY, currentRegion);
+  MaterializeNPCs(actors[0].absX, actors[0].absY, currentRegion);
+
   UpdateDayNight;
 
-  (* Set music mood matching original: checked every 8 daynight ticks.
-     Day if lightlevel > 120, night otherwise. *)
+  (* Battle flag: set per-frame when living enemies nearby.
+     battle2 holds previous tick's value — music persists one cycle.
+     Original: battleflag set in AI loop, battle2 = previous frame,
+     music only switches when both are FALSE. *)
+  battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
   IF MusicTickDue() THEN
-    IF currentRegion >= 8 THEN
+    IF battleFlag OR prevBattle THEN
+      SetMood(MoodBattle)
+    ELSIF currentRegion >= 8 THEN
       SetMood(MoodIndoor)
     ELSIF lightlevel > 120 THEN
       SetMood(MoodDay)
     ELSE
       SetMood(MoodNight)
-    END
+    END;
+    prevBattle := battleFlag
   END;
 
   IF currentRegion >= 8 THEN
@@ -413,6 +710,13 @@ BEGIN
     isNight := FALSE
   END;
   SaveBrotherState;
+
+  (* Update HUD stats from brother data *)
+  SetStats(brothers[activeBrother].brave,
+           brothers[activeBrother].luck,
+           brothers[activeBrother].kind,
+           InventoryCount(ItemGold),
+           actors[0].vitality);
 
   IF msgTimer > 0 THEN DEC(msgTimer) END;
 

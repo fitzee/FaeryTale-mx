@@ -10,5 +10,6 @@ PROCEDURE DrawMenu;
 PROCEDURE DrawMinimap;
 PROCEDURE DrawRegionFade;
 PROCEDURE DrawMessage;
+PROCEDURE DrawInventory;
 
 END Render.

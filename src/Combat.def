@@ -1,9 +1,13 @@
 DEFINITION MODULE Combat;
 
-(* Pure Modula-2 combat system.
-   Handles hit detection and damage between actors. *)
+(* Combat system matching original FTA.
+   Melee and ranged attack resolution. *)
 
 PROCEDURE UpdateCombat;
 PROCEDURE DoHit(attacker, defender: INTEGER);
+
+(* Search a dead enemy for its weapon. Returns weapon code or -1.
+   Marks the corpse as looted so it can't be searched again. *)
+PROCEDURE SearchBody(enemyIdx: INTEGER): INTEGER;
 
 END Combat.

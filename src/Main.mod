@@ -4,15 +4,18 @@ FROM InOut IMPORT WriteString, WriteLn;
 FROM Platform IMPORT Init, Shutdown, BeginFrame, EndFrame,
                     GetTicks, DelayMs, ren;
 FROM GameState IMPORT InitGame, UpdateGame, running, FrameTime,
-                      mapToggled;
+                      mapToggled, viewStatus;
 FROM Render IMPORT InitOverlay, DrawWorld, DrawItems, DrawActors,
-                   DrawHUD, DrawCompass, DrawMenu, DrawMessage;
+                   DrawHUD, DrawCompass, DrawMenu, DrawMessage,
+                   DrawInventory;
 FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
-FROM BmFont IMPORT LoadFont;
+FROM HudFont IMPORT LoadHudFont;
 FROM Compass IMPORT InitCompass;
 FROM Music IMPORT InitMusic, UpdateMusic, ShutdownMusic;
 FROM WorldObj IMPORT InitWorldObjects, LoadObjectSprites, DrawWorldObjects;
+FROM Missile IMPORT DrawMissiles;
+FROM SFX IMPORT InitSFX, ShutdownSFX;
 
 VAR
   frameStart, elapsed: INTEGER;
@@ -26,17 +29,20 @@ BEGIN
     HALT
   END;
 
-  IF NOT LoadFont(ren, "assets/topaz_12.bmp") THEN
-    WriteString("Warning: font load failed"); WriteLn
-  END;
   InitMenus;
   InitCompass(ren);
   InitOverlay;
   InitGame;
+  IF NOT LoadHudFont(ren) THEN
+    WriteString("Warning: HUD font load failed"); WriteLn
+  END;
   InitWorldObjects;
   LoadObjectSprites;
   IF NOT InitMusic() THEN
     WriteString("Warning: music init failed"); WriteLn
+  END;
+  IF NOT InitSFX() THEN
+    WriteString("Warning: SFX init failed"); WriteLn
   END;
   InitDebugMap;
 
@@ -49,10 +55,15 @@ BEGIN
     IF mapToggled THEN ToggleDebugMap END;
 
     BeginFrame;
-    DrawWorld;
-    DrawWorldObjects;
-    DrawItems;
-    DrawActors;
+    IF viewStatus = 4 THEN
+      DrawInventory
+    ELSE
+      DrawWorld;
+      DrawWorldObjects;
+      DrawItems;
+      DrawActors;
+      DrawMissiles
+    END;
     DrawHUD;
     DrawCompass;
     DrawMenu;
@@ -67,6 +78,7 @@ BEGIN
     END
   END;
 
+  ShutdownSFX;
   ShutdownMusic;
   Shutdown
 END Main.

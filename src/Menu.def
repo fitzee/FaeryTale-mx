@@ -9,6 +9,12 @@ CONST
 
   MaxOpts = 12;
 
+  (* Menu panel layout in 640x57 HUD space *)
+  PanelX = 430;
+  PanelY = 2;
+  BtnW   = 52;
+  BtnH   = 9;
+
 TYPE
   MenuDef = RECORD
     labels: ARRAY [0..59] OF CHAR;  (* up to 12 options, 5 chars each *)

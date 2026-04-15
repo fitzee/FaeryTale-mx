@@ -9,11 +9,12 @@ FROM Gfx IMPORT Window, Renderer,
                 CreateRenderer, DestroyRenderer,
                 Present, WIN_CENTERED, RENDER_ACCELERATED;
 FROM Canvas IMPORT SetColor, FillRect, Clear AS CanvasClear;
-FROM Assets IMPORT currentRegion;
+FROM Assets IMPORT currentRegion, AssetPath;
 FROM Actor IMPORT actors;
 FROM GameState IMPORT cycle;
 FROM SYSTEM IMPORT ADDRESS, ADR;
 FROM Sys IMPORT m2sys_fopen, m2sys_fclose, m2sys_fread_bytes;
+FROM Strings IMPORT Assign;
 
 CONST
   FullW = 2048;  (* 128 sectors × 16 tiles *)
@@ -59,48 +60,31 @@ END InitPalette;
 PROCEDURE LoadWorldData;
 VAR fd, n: INTEGER;
     modeBuf: ARRAY [0..3] OF CHAR;
-    basePath: ARRAY [0..63] OF CHAR;
-    pathBuf: ARRAY [0..127] OF CHAR;
+    p: ARRAY [0..127] OF CHAR;
 BEGIN
-  modeBuf[0] := 'r'; modeBuf[1] := 'b'; modeBuf[2] := 0C;
+  Assign("rb", modeBuf);
 
-  IF m2sys_file_exists(ADR("assets/sector_032.bin")) = 1 THEN
-    basePath[0] := 'a'; basePath[1] := 's'; basePath[2] := 's';
-    basePath[3] := 'e'; basePath[4] := 't'; basePath[5] := 's';
-    basePath[6] := '/'; basePath[7] := 0C
-  ELSE
-    basePath[0] := '.'; basePath[1] := '.'; basePath[2] := '/';
-    basePath[3] := '.'; basePath[4] := '.'; basePath[5] := '/';
-    basePath[6] := 'a'; basePath[7] := 's'; basePath[8] := 's';
-    basePath[9] := 'e'; basePath[10] := 't'; basePath[11] := 's';
-    basePath[12] := '/'; basePath[13] := 0C
-  END;
-
-  (* All outdoor regions share sector_032 *)
-  fd := m2sys_fopen(ADR("assets/sector_032.bin"), ADR(modeBuf));
-  IF fd < 0 THEN
-    fd := m2sys_fopen(ADR("../../assets/sector_032.bin"), ADR(modeBuf))
-  END;
+  AssetPath("sector_032.bin", p);
+  fd := m2sys_fopen(ADR(p), ADR(modeBuf));
   IF fd >= 0 THEN
     n := m2sys_fread_bytes(fd, ADR(wSector), 32768);
     m2sys_fclose(fd)
   END;
 
-  (* Load 4 map files: 160, 168, 176, 184 *)
-  fd := m2sys_fopen(ADR("assets/map_160.bin"), ADR(modeBuf));
-  IF fd < 0 THEN fd := m2sys_fopen(ADR("../../assets/map_160.bin"), ADR(modeBuf)) END;
+  AssetPath("map_160.bin", p);
+  fd := m2sys_fopen(ADR(p), ADR(modeBuf));
   IF fd >= 0 THEN n := m2sys_fread_bytes(fd, ADR(wMap[0]), 4096); m2sys_fclose(fd) END;
 
-  fd := m2sys_fopen(ADR("assets/map_168.bin"), ADR(modeBuf));
-  IF fd < 0 THEN fd := m2sys_fopen(ADR("../../assets/map_168.bin"), ADR(modeBuf)) END;
+  AssetPath("map_168.bin", p);
+  fd := m2sys_fopen(ADR(p), ADR(modeBuf));
   IF fd >= 0 THEN n := m2sys_fread_bytes(fd, ADR(wMap[1]), 4096); m2sys_fclose(fd) END;
 
-  fd := m2sys_fopen(ADR("assets/map_176.bin"), ADR(modeBuf));
-  IF fd < 0 THEN fd := m2sys_fopen(ADR("../../assets/map_176.bin"), ADR(modeBuf)) END;
+  AssetPath("map_176.bin", p);
+  fd := m2sys_fopen(ADR(p), ADR(modeBuf));
   IF fd >= 0 THEN n := m2sys_fread_bytes(fd, ADR(wMap[2]), 4096); m2sys_fclose(fd) END;
 
-  fd := m2sys_fopen(ADR("assets/map_184.bin"), ADR(modeBuf));
-  IF fd < 0 THEN fd := m2sys_fopen(ADR("../../assets/map_184.bin"), ADR(modeBuf)) END;
+  AssetPath("map_184.bin", p);
+  fd := m2sys_fopen(ADR(p), ADR(modeBuf));
   IF fd >= 0 THEN n := m2sys_fread_bytes(fd, ADR(wMap[3]), 4096); m2sys_fclose(fd) END;
 
   worldLoaded := TRUE

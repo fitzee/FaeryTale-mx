@@ -1,0 +1,27 @@
+DEFINITION MODULE HudFont;
+
+(* HUD font renderer for the 640x57 hi-res text area.
+   Two fonts matching the original:
+   - Amber (9px): proportional, for message log and stats
+   - Topaz (8px): fixed-width, for menu options
+
+   All coordinates are in 640x57 HUD space.
+   Screen mapping is handled internally. *)
+
+FROM Gfx IMPORT Renderer;
+
+PROCEDURE LoadHudFont(ren: Renderer): BOOLEAN;
+
+(* Amber font: message log and stat text *)
+PROCEDURE DrawHudStr(ren: Renderer; s: ARRAY OF CHAR;
+                     hx, hy: INTEGER);
+PROCEDURE HudStrWidth(s: ARRAY OF CHAR): INTEGER;
+
+(* Topaz font: menu labels.
+   fg/bg colors in RGB. Draws background rect then text. *)
+(* hx,hy = button origin. textOff = text inset from hx. *)
+PROCEDURE DrawMenuStr(ren: Renderer; s: ARRAY OF CHAR;
+                      hx, hy, nchars, textOff: INTEGER;
+                      fgR, fgG, fgB, bgR, bgG, bgB: INTEGER);
+
+END HudFont.

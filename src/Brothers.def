@@ -15,6 +15,10 @@ TYPE
     name:     ARRAY [0..15] OF CHAR;
     vitality: INTEGER;
     weapon:   INTEGER;
+    brave:    INTEGER;
+    luck:     INTEGER;
+    kind:     INTEGER;
+    weaponInv: ARRAY [0..5] OF INTEGER;  (* count per weapon type *)
     startX:   INTEGER;
     startY:   INTEGER;
     alive:    BOOLEAN

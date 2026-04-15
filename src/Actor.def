@@ -18,20 +18,39 @@ CONST
   StShoot1   = 24;
   StShoot3   = 25;
 
-  (* Actor types *)
+  (* Actor types — matches original sequences enum *)
   TypePlayer  = 0;
-  TypeEnemy   = 1;
-  TypeObject  = 2;
+  TypeObject  = 1;
+  TypeEnemy   = 2;
+  TypeRaft    = 3;
+  TypeSetfig  = 4;
+  TypeCarrier = 5;
+  TypeDragon  = 6;
 
-  (* Goal modes *)
-  GoalUser    = 0;
-  GoalAttack1 = 1;
-  GoalAttack2 = 2;
-  GoalFlee    = 5;
-  GoalStand   = 6;
-  GoalDeath   = 7;
-  GoalWait    = 8;
-  GoalFollow  = 9;
+  (* Goal modes — matches original #defines *)
+  GoalUser     = 0;
+  GoalAttack1  = 1;
+  GoalAttack2  = 2;
+  GoalArcher1  = 3;
+  GoalArcher2  = 4;
+  GoalFlee     = 5;
+  GoalStand    = 6;
+  GoalDeath    = 7;
+  GoalWait     = 8;
+  GoalFollow   = 9;
+  GoalConfused = 10;
+
+  (* Tactic modes — matches original do_tactic *)
+  TacPursue    = 1;
+  TacFollow    = 2;
+  TacBumble    = 3;
+  TacRandom    = 4;
+  TacBackup    = 5;
+  TacEvade     = 6;
+  TacShoot     = 8;
+  TacFrust     = 9;
+  TacShootFrust = 10;
+  TacEggSeek   = 11;
 
 TYPE
   Actor = RECORD

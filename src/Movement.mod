@@ -1,6 +1,6 @@
 IMPLEMENTATION MODULE Movement;
 
-FROM Actor IMPORT actors, actorCount, StDead;
+FROM Actor IMPORT actors, actorCount, StDead, StDying, TypeEnemy, TypeCarrier;
 FROM World IMPORT GetTerrain, IsPassable, TerrainSpeed;
 FROM Assets IMPORT currentRegion, IsBlocked, GetTerrainAt;
 
@@ -11,13 +11,18 @@ VAR
 
 PROCEDURE InitDirTables;
 BEGIN
-  xDir[0] :=  0; yDir[0] := -3;  (* N *)
+  (* Original from fsubs.c newx/newy:
+     xdir = {-2, 0, 2, 3, 2, 0,-2,-3}
+     ydir = {-2,-3,-2, 0, 2, 3, 2, 0}
+     But original dir 0 = NW. Our dir 0 = N.
+     Remapped to match our N=0,NE=1,...NW=7 convention: *)
+  xDir[0] :=  0; yDir[0] := -2;  (* N *)
   xDir[1] :=  2; yDir[1] := -2;  (* NE *)
-  xDir[2] :=  3; yDir[2] :=  0;  (* E *)
+  xDir[2] :=  2; yDir[2] :=  0;  (* E *)
   xDir[3] :=  2; yDir[3] :=  2;  (* SE *)
-  xDir[4] :=  0; yDir[4] :=  3;  (* S *)
+  xDir[4] :=  0; yDir[4] :=  2;  (* S *)
   xDir[5] := -2; yDir[5] :=  2;  (* SW *)
-  xDir[6] := -3; yDir[6] :=  0;  (* W *)
+  xDir[6] := -2; yDir[6] :=  0;  (* W *)
   xDir[7] := -2; yDir[7] := -2;  (* NW *)
   xDir[8] :=  0; yDir[8] :=  0;  (* none *)
   xDir[9] :=  0; yDir[9] :=  0   (* none *)
@@ -43,8 +48,10 @@ PROCEDURE ProxCheck(x, y, actorIdx: INTEGER): INTEGER;
 VAR
   terrain, t, j, dx, dy: INTEGER;
 BEGIN
-  (* Terrain collision — original prox() checks (x+4,y+2) and (x-4,y+2).
-     We also check (x,y) to catch walls approached from the top. *)
+  (* Wraiths (race=2) skip tile collision — they pass through walls.
+     Original: proxcheck skips prox() for ENEMY type with race==2. *)
+  IF NOT ((actors[actorIdx].actorType = TypeEnemy) AND
+          (actors[actorIdx].race = 2)) THEN
   IF currentRegion >= 0 THEN
     t := GetTerrainAt(x + 4, y + 2);
     IF t = 1 THEN RETURN t END;
@@ -76,14 +83,25 @@ BEGIN
       RETURN terrain
     END
   END;
+  END; (* wraith guard *)
 
-  (* Entity collision: 11x9 bounding box from original *)
+  (* Entity collision: 11x9 bounding box from original.
+     Dead actors are walkable. Dying actors become walkable after
+     their death animation progresses (tactic counts down from 30).
+     Original: "can walk over dead and rafts" *)
   FOR j := 0 TO actorCount - 1 DO
-    IF (j # actorIdx) AND (actors[j].state # StDead) THEN
-      dx := x - actors[j].absX;
-      dy := y - actors[j].absY;
-      IF (dx < 11) AND (dx > -11) AND (dy < 9) AND (dy > -9) THEN
-        RETURN 16
+    IF (j # actorIdx) AND
+       (actors[j].state # StDead) AND
+       (actors[j].actorType # TypeCarrier) THEN
+      (* Dying actors become passable halfway through death anim *)
+      IF (actors[j].state = StDying) AND (actors[j].tactic < 15) THEN
+        (* soft obstacle — passable *)
+      ELSE
+        dx := x - actors[j].absX;
+        dy := y - actors[j].absY;
+        IF (dx < 11) AND (dx > -11) AND (dy < 9) AND (dy > -9) THEN
+          RETURN 16
+        END
       END
     END
   END;
