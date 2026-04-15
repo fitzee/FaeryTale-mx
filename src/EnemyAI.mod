@@ -83,43 +83,55 @@ END StepMove;
 (* --- Tactic selection: picks a direction, does NOT move --- *)
 
 PROCEDURE SelectTactic(i, tactic: INTEGER);
+VAR r: BOOLEAN;
 BEGIN
+  (* Original do_tactic: r = !(rand()&7) — 1/8 chance gate on set_course.
+     For ATTACK2 goal: r = !(rand()&3) — 1/4 chance instead. *)
+  IF actors[i].goal = GoalAttack2 THEN
+    r := (Rand(4) = 0)
+  ELSE
+    r := (Rand(8) = 0)
+  END;
+
   actors[i].tactic := tactic;
 
   IF tactic = TacPursue THEN
-    SetCourse(i, actors[0].absX, actors[0].absY)
+    IF r THEN SetCourse(i, actors[0].absX, actors[0].absY) END
 
   ELSIF tactic = TacShoot THEN
     SetCourse(i, actors[0].absX, actors[0].absY);
-    IF (Rand(4) = 0) AND (actors[i].state < StShoot1) THEN
+    IF (Rand(2) = 0) AND (actors[i].state < StShoot1) THEN
       actors[i].state := StShoot1
     END
 
   ELSIF tactic = TacRandom THEN
-    actors[i].facing := Rand(8);
+    IF r THEN actors[i].facing := Rand(8) END;
     actors[i].state := StWalking
 
   ELSIF tactic = TacBumble THEN
-    SetCourse(i, actors[0].absX, actors[0].absY)
+    IF r THEN SetCourse(i, actors[0].absX, actors[0].absY) END
 
   ELSIF tactic = TacBackup THEN
-    SetCourseAway(i, actors[0].absX, actors[0].absY)
+    IF r THEN SetCourseAway(i, actors[0].absX, actors[0].absY) END
 
   ELSIF tactic = TacFollow THEN
-    IF actorCount > 2 THEN
-      IF i > 1 THEN
-        SetCourse(i, actors[i-1].absX, actors[i-1].absY + 20)
-      ELSE
-        SetCourse(i, actors[2].absX, actors[2].absY + 20)
+    IF r THEN
+      IF actorCount > 2 THEN
+        IF i > 1 THEN
+          SetCourse(i, actors[i-1].absX, actors[i-1].absY + 20)
+        ELSE
+          SetCourse(i, actors[2].absX, actors[2].absY + 20)
+        END
       END
     END
 
   ELSIF tactic = TacEvade THEN
-    actors[i].facing := (actors[i].facing + 2) MOD 8;
-    actors[i].state := StWalking
+    IF r THEN
+      actors[i].facing := (actors[i].facing + 2) MOD 8;
+      actors[i].state := StWalking
+    END
 
   ELSIF tactic = TacFrust THEN
-    (* Pick a new random tactic *)
     IF BAND(CARDINAL(actors[i].weapon), 4) # 0 THEN
       SelectTactic(i, Rand(4) + 2)
     ELSE
@@ -203,14 +215,8 @@ BEGIN
 
   (* === HOSTILE MODES === *)
   IF mode <= GoalArcher2 THEN
-    (* Direction re-evaluation cadence:
-       ATTACK1/ARCHER1: ~1 in 8 frames.
-       ATTACK2/ARCHER2: ~1 in 16 frames. *)
-    IF BAND(CARDINAL(mode), 2) = 0 THEN
-      r := (Rand(8) = 0)
-    ELSE
-      r := (Rand(16) = 0)
-    END;
+    (* Original: r = !bitrand(15) — 1/16 chance per frame *)
+    r := (Rand(16) = 0);
 
     (* Tactic selection — only when r is TRUE *)
     IF r THEN

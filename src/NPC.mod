@@ -10,7 +10,7 @@ FROM WorldObj IMPORT objects, objCount, AddObj;
 FROM Assets IMPORT currentRegion;
 FROM Brothers IMPORT brothers, activeBrother,
                     StWrit, StBone, StShard, StStatue, StSunStone,
-                    HasStuff, GiveStuff, SetStuff, IncKind;
+                    HasStuff, GiveStuff, SetStuff, AddWealth, IncKind;
 
 TYPE
   SetfigDef = RECORD
@@ -291,23 +291,36 @@ BEGIN
   IF idx < 0 THEN RETURN FALSE END;
   race := actors[idx].race;
 
-  (* Spectre (race 10): accepts Bone → drops Shard *)
-  IF (race = 10) AND (itemIdx = 29) AND
-     HasStuff(StBone) THEN
-    SetStuff(StBone, 0);
-    AddObj(actors[idx].absX, actors[idx].absY, 140, 1, -1);  (* Shard *)
-    Assign("% gave him the ancient bones.", response);
-    RETURN TRUE
-  END;
-
-  (* Beggar (race 13): accepts gold → kindness increase *)
-  IF (race = 13) AND (itemIdx = 31) THEN  (* gold *)
-    Assign("The beggar thanks you kindly.", response);
+  (* Gold (itemIdx 0 = menu slot 5 "Gold") *)
+  IF itemIdx = 0 THEN
+    IF brothers[activeBrother].wealth <= 2 THEN
+      Assign("Not enough gold.", response);
+      RETURN TRUE
+    END;
+    AddWealth(-2);
     IncKind;
+    IF race = 13 THEN  (* beggar *)
+      GetSpeech(23, response)   (* "Alms! Alms for the poor!" *)
+    ELSE
+      GetSpeech(49, response)   (* generic response *)
+    END;
     RETURN TRUE
   END;
 
-  Assign("Sorry, I have no use for it.", response);
+  (* Bone (itemIdx 3 = menu slot 8 "Bone") *)
+  IF (itemIdx = 3) AND HasStuff(StBone) THEN
+    IF race = 10 THEN  (* spectre *)
+      SetStuff(StBone, 0);
+      AddObj(actors[idx].absX, actors[idx].absY, 140, 1, -1);
+      GetSpeech(48, response);  (* "% gave him the ancient bones." *)
+    ELSE
+      GetSpeech(21, response)   (* "Sorry, I have no use for it." *)
+    END;
+    RETURN TRUE
+  END;
+
+  (* Book and Writ: not implemented in original either *)
+  Assign("", response);
   RETURN TRUE
 END GiveToNPC;
 

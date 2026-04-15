@@ -21,8 +21,9 @@ END HasStuff;
 
 PROCEDURE HasWeapon(idx: INTEGER): BOOLEAN;
 BEGIN
+  (* weaponInv indices 1-5 map to stuff[0-4] *)
   IF (idx >= 1) AND (idx <= 5) THEN
-    RETURN brothers[activeBrother].weaponInv[idx] > 0
+    RETURN brothers[activeBrother].stuff[idx - 1] > 0
   END;
   RETURN FALSE
 END HasWeapon;
@@ -33,6 +34,13 @@ BEGIN
     INC(brothers[activeBrother].stuff[idx])
   END
 END GiveStuff;
+
+PROCEDURE AddStuffN(idx, n: INTEGER);
+BEGIN
+  IF (idx >= 0) AND (idx <= 34) THEN
+    INC(brothers[activeBrother].stuff[idx], n)
+  END
+END AddStuffN;
 
 PROCEDURE SetStuff(idx, val: INTEGER);
 BEGIN
@@ -84,7 +92,7 @@ BEGIN
   brothers[Julian].kind := 15;
   brothers[Julian].wealth := 20;
   ClearInventory(brothers[Julian]);
-  brothers[Julian].weaponInv[1] := 1;  (* starts with dirk *)
+  brothers[Julian].stuff[0] := 1;  (* starts with dirk *)
   brothers[Julian].startX := 19036;
   brothers[Julian].startY := 15755;
   brothers[Julian].alive := TRUE;

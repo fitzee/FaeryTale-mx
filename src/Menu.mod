@@ -135,7 +135,7 @@ BEGIN
   FOR i := 0 TO 7 DO SetEnabled(menus[MFile], i, 10) END;
 
   cmode := MItems;
-  SetOptions
+  BuildOptions  (* just build initial options without reading inventory *)
 END InitMenus;
 
 PROCEDURE BuildOptions;
@@ -144,7 +144,7 @@ BEGIN
   j := 0;
   FOR i := 0 TO menus[cmode].num - 1 DO
     IF (menus[cmode].enabled[i] # 0) AND
-       ((menus[cmode].enabled[i] AND 2) # 0) THEN
+       (BAND(CARDINAL(menus[cmode].enabled[i]), 2) # 0) THEN
       realOptions[j] := i;
       INC(j);
       IF j > 11 THEN i := menus[cmode].num END  (* break *)
@@ -180,47 +180,38 @@ END WF;
 PROCEDURE SetOptions;
 VAR i, j: INTEGER;
 BEGIN
-  (* USE menu: slots 0-6 = stuff[0-6], slot 7 = any key, slot 8 = sun stone.
-     Original: menus[USE].enabled[i] = stuff_flag(i) for i=0..6 *)
-  menus[MUse].enabled[0] := WF(1);   (* Dirk *)
-  menus[MUse].enabled[1] := WF(2);   (* Mace *)
-  menus[MUse].enabled[2] := WF(3);   (* Sword *)
-  menus[MUse].enabled[3] := WF(4);   (* Bow *)
-  menus[MUse].enabled[4] := WF(5);   (* Wand *)
-  menus[MUse].enabled[5] := SF(5);   (* Lasso *)
-  menus[MUse].enabled[6] := SF(6);   (* Shell *)
-  (* Slot 7 = Keys: 10 if ANY key exists *)
-  j := 8;
-  FOR i := 16 TO 21 DO
-    IF brothers[activeBrother].stuff[i] > 0 THEN j := 10 END
-  END;
-  menus[MUse].enabled[7] := j;
-  menus[MUse].enabled[8] := SF(7);   (* Sun Stone *)
+  (* All menus: slots 0-4 are category tabs (always displayed).
+     Sub-items start at slot 5. *)
 
-  (* MAGIC menu: slots 5-11 = stuff[9-15].
-     Original: menus[MAGIC].enabled[i+5] = stuff_flag(i+9) *)
+  (* USE: 5=Dirk 6=Mace 7=Sword 8=Bow 9=Wand 10=Lasso 11=Shell *)
+  menus[MUse].enabled[5]  := WF(1);
+  menus[MUse].enabled[6]  := WF(2);
+  menus[MUse].enabled[7]  := WF(3);
+  menus[MUse].enabled[8]  := WF(4);
+  menus[MUse].enabled[9]  := WF(5);
+  menus[MUse].enabled[10] := SF(5);   (* Lasso *)
+  menus[MUse].enabled[11] := SF(6);   (* Shell *)
+
+  (* MAGIC: 5-11 = stuff[9-15] *)
   FOR i := 0 TO 6 DO
     menus[MMagic].enabled[i + 5] := SF(i + 9)
   END;
 
-  (* KEYS menu: slots 5-10 = stuff[16-21].
-     Original: menus[KEYS].enabled[i+5] = stuff_flag(i+16) *)
+  (* KEYS: 5-10 = stuff[16-21] *)
   FOR i := 0 TO 5 DO
     menus[MKeys].enabled[i + 5] := SF(i + 16)
   END;
 
-  (* GIVE menu: gold, book, writ, bone.
-     Original: wealth>2 for gold, stuff_flag for others *)
+  (* GIVE: 5=gold 6=book 7=writ 8=bone *)
   IF brothers[activeBrother].wealth > 2 THEN
     menus[MGive].enabled[5] := 10
   ELSE
     menus[MGive].enabled[5] := 8
   END;
-  menus[MGive].enabled[6] := SF(26);  (* Book *)
-  menus[MGive].enabled[7] := SF(28);  (* Writ *)
-  menus[MGive].enabled[8] := SF(29);  (* Bone *)
+  menus[MGive].enabled[6] := SF(26);
+  menus[MGive].enabled[7] := SF(28);
+  menus[MGive].enabled[8] := SF(29);
 
-  (* Rebuild visible options for current menu *)
   BuildOptions
 END SetOptions;
 

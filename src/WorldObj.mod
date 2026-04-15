@@ -162,7 +162,7 @@ BEGIN
 END LoadObjectSprites;
 
 PROCEDURE DrawWorldObjects;
-VAR i, sx, sy, sprY: INTEGER;
+VAR i, sx, sy, sprY, ht, id: INTEGER;
 BEGIN
   IF objTex = NIL THEN RETURN END;
 
@@ -177,11 +177,22 @@ BEGIN
       IF (sx > -S(20)) AND (sx < S(PlayW) + 20) AND
          (sy > -S(20)) AND (sy < S(PlayH) + 20) THEN
         sprY := objects[i].objId * ObjSprH;
-        IF sprY + ObjSprH <= 1856 THEN
+        (* Original: certain objects render at half height (8px).
+           if inum==27 || (inum>=8 && inum<=12) || inum==25 || inum==26 ||
+              (inum>16 && inum<24) || (inum & 128)  → ysize=8 *)
+        ht := ObjSprH;
+        id := objects[i].objId;
+        IF (id = 27) OR ((id >= 8) AND (id <= 12)) OR
+           (id = 25) OR (id = 26) OR
+           ((id > 16) AND (id < 24)) OR
+           (BAND(CARDINAL(id), 128) # 0) THEN
+          ht := 8
+        END;
+        IF sprY + ht <= 1856 THEN
           DrawTexRegion(objTex,
-                        0, sprY, ObjSprW, ObjSprH,
-                        sx - S(8), sy - S(8),
-                        S(ObjSprW), S(ObjSprH))
+                        0, sprY, ObjSprW, ht,
+                        sx - S(8), sy - S(ht DIV 2),
+                        S(ObjSprW), S(ht))
         END
       END
     END

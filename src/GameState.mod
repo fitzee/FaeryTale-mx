@@ -23,13 +23,14 @@ FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
                      activeBrother, GiveStuff, SetStuff, AddWealth,
-                     HasWeapon, HasStuff;
-FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC;
+                     HasWeapon, HasStuff, AddStuffN;
+FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC,
+               FindNearestNPC, GiveToNPC;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
                    GetTerrainAt, GetSectorByte;
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
-                 optionCount, MItems, MGame, GoMenu,
+                 optionCount, MItems, MBuy, MGive, MGame, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
 FROM Music IMPORT SetMood, StopMusic, MoodDay, MoodNight, MoodIndoor,
                   MoodBattle;
@@ -52,6 +53,7 @@ VAR
   battleFlag: BOOLEAN;
   prevBattle: BOOLEAN;
   dayPeriod: INTEGER;
+  aftermathDone: BOOLEAN;  (* prevents repeated aftermath for same encounter *)
   fatigue: INTEGER;
   hunger: INTEGER;
   sleepWait: INTEGER;
@@ -120,6 +122,7 @@ BEGIN
   prevBattle := FALSE;
   viewStatus := 0;
   dayPeriod := 6;
+  aftermathDone := FALSE;
   fatigue := 0;
   hunger := 0;
   sleepWait := 0;
@@ -136,6 +139,7 @@ BEGIN
   InitEncounters;
   InitMissiles;
   InitTreasureProbs;
+  InitBuyTable;
 
   RestoreBrotherState;
   actorCount := 1;
@@ -271,9 +275,13 @@ BEGIN
         hasWeapon := FALSE; hasTreasure := FALSE;
         w := SearchBody(i);
         IF (w >= 1) AND (w <= 5) THEN
-          INC(brothers[activeBrother].weaponInv[w]);
+          GiveStuff(w - 1);  (* weaponIdx 1-5 → stuff[0-4] *)
           WeaponName(w, wname); hasWeapon := TRUE;
-          IF w > actors[0].weapon THEN actors[0].weapon := w END
+          IF w > actors[0].weapon THEN actors[0].weapon := w END;
+          (* Bow loot: also gives rand(8)+2 arrows *)
+          IF w = 4 THEN
+            AddStuffN(8, (cycle MOD 8) + 2)
+          END
         END;
         race := actors[i].race; ti := 0;
         IF race < 128 THEN
@@ -349,6 +357,78 @@ BEGIN
   END
 END ContainerLoot;
 
+(* Buy price table: pairs of (stuff_index, cost).
+   Menu slots 5-11 map to indices 0-6 in this table.
+   Original: jtrans[] = { 0,3, 8,10, 11,15, 1,30, 2,45, 3,75, 13,20 } *)
+CONST
+  BuyItems = 7;
+VAR
+  buyStuff: ARRAY [0..6] OF INTEGER;
+  buyCost:  ARRAY [0..6] OF INTEGER;
+
+PROCEDURE InitBuyTable;
+BEGIN
+  buyStuff[0] :=  0; buyCost[0] :=  3;   (* Food *)
+  buyStuff[1] :=  8; buyCost[1] := 10;   (* Arrows *)
+  buyStuff[2] := 11; buyCost[2] := 15;   (* Vial *)
+  buyStuff[3] :=  1; buyCost[3] := 30;   (* Mace *)
+  buyStuff[4] :=  2; buyCost[4] := 45;   (* Sword *)
+  buyStuff[5] :=  3; buyCost[5] := 75;   (* Bow *)
+  buyStuff[6] := 13; buyCost[6] := 20    (* Totem *)
+END InitBuyTable;
+
+PROCEDURE HandleBuy(optIdx: INTEGER);
+VAR npc, slot, si, cost: INTEGER;
+BEGIN
+  npc := FindNearestNPC(actors[0].absX, actors[0].absY);
+  IF npc < 0 THEN ShowMessage("Nobody to buy from."); RETURN END;
+  IF actors[npc].race # 8 THEN
+    ShowMessage("Nobody to buy from."); RETURN
+  END;
+  IF (optIdx < 5) OR (optIdx > 11) THEN RETURN END;
+  slot := optIdx - 5;
+  si := buyStuff[slot];
+  cost := buyCost[slot];
+  IF brothers[activeBrother].wealth > cost THEN
+    AddWealth(-cost);
+    IF si = 0 THEN
+      (* Food: original order is event(22) then eat(50) *)
+      Event(22);
+      DEC(hunger, 50);
+      IF hunger < 0 THEN hunger := 0; Event(13)
+      ELSE ShowMessage("Yum!")
+      END
+    ELSIF si = 8 THEN
+      (* Arrows: buy 10 *)
+      AddStuffN(8, 10);
+      Event(23)
+    ELSE
+      GiveStuff(si);
+      Assign("% bought a ", msgBuf);
+      TreasureName(si, nameBuf);
+      Concat(msgBuf, nameBuf, msgBuf);
+      Concat(msgBuf, ".", msgBuf);
+      ShowMessage(msgBuf)
+    END;
+    SetOptions
+  ELSE
+    ShowMessage("Not enough money!")
+  END
+END HandleBuy;
+
+PROCEDURE HandleGive(optIdx: INTEGER);
+VAR resp: ARRAY [0..127] OF CHAR;
+    npc: INTEGER;
+BEGIN
+  npc := FindNearestNPC(actors[0].absX, actors[0].absY);
+  IF npc < 0 THEN ShowMessage("Nobody here."); GoMenu(0); RETURN END;
+  IF GiveToNPC(actors[0].absX, actors[0].absY, optIdx - 5, resp) THEN
+    IF resp[0] # 0C THEN ShowMessage(resp) END
+  END;
+  SetOptions;
+  GoMenu(0)
+END HandleGive;
+
 PROCEDURE HandleMenuClick(mx, my: INTEGER);
 CONST HudW = 640;
 VAR hx, hy, col, row, itemIdx, optIdx: INTEGER;
@@ -375,10 +455,12 @@ BEGIN
     2: CASE optIdx OF
         5: HandleYell | 6: HandleTalk | 7: HandleTalk
       ELSE END |
+    3: HandleBuy(optIdx) |
     4: CASE optIdx OF
         5: TogglePause | 6: ToggleMusic | 7: |
         8: running := FALSE | 9: ShowMessage("Load not implemented")
       ELSE END |
+    7: HandleGive(optIdx) |
     8: IF (optIdx >= 5) AND (optIdx <= 9) THEN
         IF HasWeapon(optIdx - 4) THEN
           actors[0].weapon := optIdx - 4;
@@ -404,15 +486,22 @@ BEGIN
       17: ShowMessage("Found a gold ring!"); GiveStuff(14) |
       18: ShowMessage("Found a blue stone!"); GiveStuff(9) |
       19: ShowMessage("Found a gold jewel!"); GiveStuff(10) |
-      20: ShowMessage("Found a scrap of paper!"); GiveStuff(20) |
+      20: Event(17);
+          IF currentRegion > 7 THEN Event(19)
+          ELSE Event(18) END |
       22: ShowMessage("Found a vial!"); GiveStuff(11) |
       23: ShowMessage("Found a totem!"); GiveStuff(13) |
       24: ShowMessage("Found a skull!"); GiveStuff(15) |
       25: ShowMessage("Found a gold key!"); GiveStuff(16) |
       26: ShowMessage("Found a grey key!"); GiveStuff(20) |
+      11: ShowMessage("Found a quiver of arrows!"); AddStuffN(8, 10) |
+       8: ShowMessage("Found a sword!"); GiveStuff(2) |
+       9: ShowMessage("Found a mace!"); GiveStuff(1) |
+      10: ShowMessage("Found a bow!"); GiveStuff(3) |
+      12: ShowMessage("Found a dirk!"); GiveStuff(0) |
      102: ShowMessage("Found a turtle!") |
      114: ShowMessage("Found a blue key!"); GiveStuff(18) |
-     145: ShowMessage("Found a magic wand!"); SetStuff(4, 1) |
+     145: ShowMessage("Found a magic wand!"); GiveStuff(4) |
      148: ShowMessage("Found some fruit!"); GiveStuff(24) |
      151: ShowMessage("Found a shell!"); GiveStuff(6) |
      153: ShowMessage("Found a green key!"); GiveStuff(17) |
@@ -423,6 +512,7 @@ BEGIN
      139: ShowMessage("% found the Talisman!"); SetStuff(22, 1);
           ShowMessage("The quest is complete!") |
      140: ShowMessage("% found a Shard!"); SetStuff(30, 1) |
+     155: ShowMessage("% found the Sun Stone!"); SetStuff(7, 1) |
      149: ShowMessage("Found a gold statue!"); GiveStuff(25)
     ELSE ShowMessage("Found something!") END;
     SetOptions
@@ -529,7 +619,7 @@ BEGIN
       IF dx < 0 THEN dx := -dx END;
       IF dy < 0 THEN dy := -dy END;
       IF (dx < 300) AND (dy < 300) THEN
-        IF actors[i].state = StDead THEN INC(dead)
+        IF (actors[i].state = StDead) OR (actors[i].state = StDying) THEN INC(dead)
         ELSIF actors[i].goal = GoalFlee THEN INC(flee) END
       END
     END
@@ -583,7 +673,16 @@ BEGIN
   IF input.talk AND (potionCooldown = 0) THEN HandleTalk; potionCooldown := 30 END;
   IF input.attack THEN
     IF (actors[0].weapon >= 4) AND (actors[0].state # StShoot1) THEN
-      actors[0].state := StShoot1; FireMissile(0);
+      IF (actors[0].weapon = 4) AND
+         (brothers[activeBrother].stuff[8] <= 0) THEN
+        ShowMessage("No Arrows!")
+      ELSE
+        actors[0].state := StShoot1; FireMissile(0);
+        (* Deplete arrow for bow, not for wand *)
+        IF actors[0].weapon = 4 THEN
+          DEC(brothers[activeBrother].stuff[8])
+        END
+      END;
       actors[0].velX := 0; actors[0].velY := 0
     ELSIF actors[0].weapon >= 4 THEN
       actors[0].velX := 0; actors[0].velY := 0
@@ -669,7 +768,11 @@ BEGIN
   END;
 
   battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
-  IF (NOT battleFlag) AND prevBattle THEN BattleAftermath; prevBattle := FALSE END;
+  IF battleFlag THEN aftermathDone := FALSE END;  (* new battle resets *)
+  IF (NOT battleFlag) AND prevBattle AND (NOT aftermathDone) THEN
+    BattleAftermath;
+    aftermathDone := TRUE
+  END;
   IF MusicTickDue() THEN
     IF battleFlag OR prevBattle THEN SetMood(MoodBattle)
     ELSIF currentRegion >= 8 THEN SetMood(MoodIndoor)

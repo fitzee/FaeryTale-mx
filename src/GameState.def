@@ -3,7 +3,7 @@ DEFINITION MODULE GameState;
 (* Pure Modula-2 game state management *)
 
 CONST
-  FrameTime = 16;  (* ~60fps in ms *)
+  FrameTime = 20;  (* 50Hz PAL vblank rate *)
   MsgLen    = 64;
 
 VAR

@@ -1187,31 +1187,9 @@ VAR b, i: INTEGER;
 BEGIN
   b := activeBrother;
 
-  (* Build stuff array from our inventory systems.
-     Maps our Items.inventory[] and Brothers.weaponInv[] to
-     the original's 35-slot stuff[] layout. *)
-  FOR i := 0 TO 34 DO stuff[i] := 0 END;
-  (* 0-4: Weapons from weaponInv *)
-  stuff[0] := brothers[b].weaponInv[1];   (* Dirk *)
-  stuff[1] := brothers[b].weaponInv[2];   (* Mace *)
-  stuff[2] := brothers[b].weaponInv[3];   (* Sword *)
-  stuff[3] := brothers[b].weaponInv[4];   (* Bow *)
-  stuff[4] := brothers[b].weaponInv[5];   (* Wand *)
-  (* 8: Arrows — not tracked yet *)
-  (* 9: Blue Stone = ItemGem *)
-  stuff[9]  := inventory[ItemGem];
-  (* 11: Glass Vial = ItemPotion *)
-  stuff[11] := inventory[ItemPotion];
-  (* 14: Gold Ring = ItemShield (reused) *)
-  stuff[14] := inventory[ItemShield];
-  (* 15: Jade Skull = ItemScroll (reused) *)
-  stuff[15] := inventory[ItemScroll];
-  (* 16: Gold Key = ItemKey *)
-  stuff[16] := inventory[ItemKey];
-  (* 24: Fruit = ItemFood *)
-  stuff[24] := inventory[ItemFood];
-  (* 31: Gold = ItemGold *)
-  stuff[31] := inventory[ItemGold];
+  (* Read directly from brothers[].stuff[] — the authoritative inventory.
+     stuff[0..4] are weapons (Dirk,Mace,Sword,Bow,Wand). *)
+  FOR i := 0 TO 34 DO stuff[i] := brothers[b].stuff[i] END;
 
   (* Clear play area to black *)
   SetColor(ren, 0, 0, 0, 255);

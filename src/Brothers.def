@@ -43,6 +43,7 @@ VAR
 PROCEDURE HasStuff(idx: INTEGER): BOOLEAN;
 PROCEDURE HasWeapon(idx: INTEGER): BOOLEAN;
 PROCEDURE GiveStuff(idx: INTEGER);
+PROCEDURE AddStuffN(idx, n: INTEGER);
 PROCEDURE SetStuff(idx, val: INTEGER);
 PROCEDURE AddWealth(amount: INTEGER);
 PROCEDURE IncBrave;
