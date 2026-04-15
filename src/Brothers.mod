@@ -4,11 +4,73 @@ FROM Strings IMPORT Assign;
 FROM Actor IMPORT actors;
 FROM World IMPORT TileSize;
 
-PROCEDURE ClearWeaponInv(VAR b: BrotherData);
+PROCEDURE ClearInventory(VAR b: BrotherData);
 VAR i: INTEGER;
 BEGIN
-  FOR i := 0 TO 5 DO b.weaponInv[i] := 0 END
-END ClearWeaponInv;
+  FOR i := 0 TO 5 DO b.weaponInv[i] := 0 END;
+  FOR i := 0 TO 34 DO b.stuff[i] := 0 END
+END ClearInventory;
+
+PROCEDURE HasStuff(idx: INTEGER): BOOLEAN;
+BEGIN
+  IF (idx >= 0) AND (idx <= 34) THEN
+    RETURN brothers[activeBrother].stuff[idx] > 0
+  END;
+  RETURN FALSE
+END HasStuff;
+
+PROCEDURE HasWeapon(idx: INTEGER): BOOLEAN;
+BEGIN
+  IF (idx >= 1) AND (idx <= 5) THEN
+    RETURN brothers[activeBrother].weaponInv[idx] > 0
+  END;
+  RETURN FALSE
+END HasWeapon;
+
+PROCEDURE GiveStuff(idx: INTEGER);
+BEGIN
+  IF (idx >= 0) AND (idx <= 34) THEN
+    INC(brothers[activeBrother].stuff[idx])
+  END
+END GiveStuff;
+
+PROCEDURE SetStuff(idx, val: INTEGER);
+BEGIN
+  IF (idx >= 0) AND (idx <= 34) THEN
+    brothers[activeBrother].stuff[idx] := val
+  END
+END SetStuff;
+
+PROCEDURE AddWealth(amount: INTEGER);
+BEGIN
+  INC(brothers[activeBrother].wealth, amount)
+END AddWealth;
+
+PROCEDURE IncBrave;
+BEGIN
+  INC(brothers[activeBrother].brave)
+END IncBrave;
+
+PROCEDURE DecLuck(amount: INTEGER);
+BEGIN
+  DEC(brothers[activeBrother].luck, amount);
+  IF brothers[activeBrother].luck < 0 THEN
+    brothers[activeBrother].luck := 0
+  END
+END DecLuck;
+
+PROCEDURE DecKind(amount: INTEGER);
+BEGIN
+  DEC(brothers[activeBrother].kind, amount);
+  IF brothers[activeBrother].kind < 0 THEN
+    brothers[activeBrother].kind := 0
+  END
+END DecKind;
+
+PROCEDURE IncKind;
+BEGIN
+  INC(brothers[activeBrother].kind)
+END IncKind;
 
 PROCEDURE InitBrothers;
 BEGIN
@@ -20,7 +82,8 @@ BEGIN
   brothers[Julian].brave := 35;
   brothers[Julian].luck := 20;
   brothers[Julian].kind := 15;
-  ClearWeaponInv(brothers[Julian]);
+  brothers[Julian].wealth := 20;
+  ClearInventory(brothers[Julian]);
   brothers[Julian].weaponInv[1] := 1;  (* starts with dirk *)
   brothers[Julian].startX := 19036;
   brothers[Julian].startY := 15755;
@@ -32,7 +95,8 @@ BEGIN
   brothers[Philip].brave := 20;
   brothers[Philip].luck := 35;
   brothers[Philip].kind := 15;
-  ClearWeaponInv(brothers[Philip]);
+  brothers[Philip].wealth := 15;
+  ClearInventory(brothers[Philip]);
   brothers[Philip].startX := 19036;
   brothers[Philip].startY := 15755;
   brothers[Philip].alive := TRUE;
@@ -42,8 +106,9 @@ BEGIN
   brothers[Kevin].weapon := 0;
   brothers[Kevin].brave := 15;
   brothers[Kevin].luck := 20;
-  ClearWeaponInv(brothers[Kevin]);
+  ClearInventory(brothers[Kevin]);
   brothers[Kevin].kind := 35;
+  brothers[Kevin].wealth := 10;
   brothers[Kevin].startX := 19036;
   brothers[Kevin].startY := 15755;
   brothers[Kevin].alive := TRUE

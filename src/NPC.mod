@@ -6,8 +6,11 @@ IMPLEMENTATION MODULE NPC;
 FROM Strings IMPORT Assign;
 FROM Actor IMPORT actors, actorCount, MaxActors,
                   TypeSetfig, StStill, StDead, GoalWait, GoalStand;
-FROM WorldObj IMPORT objects, objCount;
+FROM WorldObj IMPORT objects, objCount, AddObj;
 FROM Assets IMPORT currentRegion;
+FROM Brothers IMPORT brothers, activeBrother,
+                    StWrit, StBone, StShard, StStatue, StSunStone,
+                    HasStuff, GiveStuff, SetStuff, IncKind;
 
 TYPE
   SetfigDef = RECORD
@@ -21,6 +24,10 @@ VAR
 
   (* Track which WorldObj indices are currently materialized as actors *)
   materialized: ARRAY [0..199] OF BOOLEAN;
+
+  (* One-time reward flags *)
+  priestStatueGiven:    BOOLEAN;
+  sorceressStatueGiven: BOOLEAN;
 
   (* Speech table — transcribed from original narr.c speeches[] *)
   speeches: ARRAY [0..49] OF ARRAY [0..127] OF CHAR;
@@ -72,42 +79,42 @@ BEGIN
   Assign("Nice weather we're having, isn't it?", speeches[9]);
   Assign("Good luck, sonny! Hope you win!", speeches[10]);
   Assign("If you need to cross the lake, there's a raft north of here.", speeches[11]);
-  Assign("Would you like to buy something? said the tavern keeper.", speeches[12]);
-  Assign("Good Morning. Hope you slept well.", speeches[13]);
-  Assign("Have a drink! said the tavern keeper.", speeches[14]);
-  Assign("State your business! said the guard.", speeches[15]);
-  Assign("Please, sir, rescue me from this prison! pleaded the princess.", speeches[16]);
-  Assign("I cannot help you. My armies are decimated.", speeches[17]);
+  Assign('"Would you like to buy something?" said the tavern keeper.', speeches[12]);
+  Assign('"Good Morning. Hope you slept well."', speeches[13]);
+  Assign('"Have a drink!" said the tavern keeper.', speeches[14]);
+  Assign('"State your business!" said the guard.', speeches[15]);
+  Assign('"Please, sir, rescue me!" pleaded the princess.', speeches[16]);
+  Assign('"I cannot help you. My armies are decimated."', speeches[17]);
   Assign("Here is a writ designating you as my official agent.", speeches[18]);
   Assign("I already gave the golden statue to another.", speeches[19]);
   Assign("If you could rescue the princess, the King's courage would be restored.", speeches[20]);
   Assign("Sorry, I have no use for it.", speeches[21]);
   Assign("The dragon's cave is directly north of here.", speeches[22]);
-  Assign("Alms! Alms for the poor!", speeches[23]);
-  Assign("I have a prophecy for you, m'lord.", speeches[24]);
+  Assign('"Alms! Alms for the poor!"', speeches[23]);
+  Assign('"I have a prophecy for you, lord."', speeches[24]);
   Assign("Lovely Jewels, glint in the night!", speeches[25]);
   Assign("Where is the hidden city? How can you find what you cannot see?", speeches[26]);
-  Assign("Kind deeds could gain thee a friend from the sea.", speeches[27]);
-  Assign("Seek the place darker than night!", speeches[28]);
-  Assign("A crystal Orb can help to find things concealed.", speeches[29]);
-  Assign("The Witch lives in Grimwood. Her gaze is Death!", speeches[30]);
-  Assign("Only the light of the Sun can destroy the Witch's Evil.", speeches[31]);
-  Assign("The maiden lies imprisoned in an unreachable castle.", speeches[32]);
-  Assign("Tame the golden beast! But what rope could hold it?", speeches[33]);
-  Assign("Just what I needed! he said.", speeches[34]);
-  Assign("Away with you, young ruffian!", speeches[35]);
-  Assign("Seek your enemy on the spirit plane.", speeches[36]);
-  Assign("When you wish to travel quickly, seek the power of the Stones.", speeches[37]);
-  Assign("Since you are brave of heart, I shall Heal all your wounds.", speeches[38]);
-  Assign("Here is one of the golden statues of Azal-Car-Ithil.", speeches[39]);
-  Assign("Repent, Sinner!", speeches[40]);
-  Assign("None may enter the sacred shrine!", speeches[41]);
-  Assign("You have earned the right to enter and claim the prize.", speeches[42]);
-  Assign("So this is the so-called Hero. Simply Pathetic!", speeches[43]);
-  Assign("The Necromancer has been transformed into a normal man.", speeches[44]);
-  Assign("Welcome. Here is one of the golden figurines you need.", speeches[45]);
-  Assign("Look into my eyes and Die!! hissed the witch.", speeches[46]);
-  Assign("Bring me bones of the ancient King.", speeches[47]);
+  Assign('"Kind deeds could gain thee a friend from the sea."', speeches[27]);
+  Assign('"Seek the place darker than night!" said the wizard.', speeches[28]);
+  Assign('"A crystal Orb can help find things concealed."', speeches[29]);
+  Assign('"The Witch lives in Grimwood. Her gaze is Death!"', speeches[30]);
+  Assign('"Only the light of the Sun can destroy the Evil."', speeches[31]);
+  Assign('"The maiden lies imprisoned in an unreachable castle."', speeches[32]);
+  Assign('"Tame the golden beast! But what rope could hold it?"', speeches[33]);
+  Assign('"Just what I needed!" he said.', speeches[34]);
+  Assign('"Away with you, young ruffian!" said the Wizard.', speeches[35]);
+  Assign('"Seek your enemy on the spirit plane."', speeches[36]);
+  Assign('"Seek the power of the Stones." he said.', speeches[37]);
+  Assign('"I shall Heal all your wounds." % felt better.', speeches[38]);
+  Assign('"Here is one of the golden statues."', speeches[39]);
+  Assign('"Repent, Sinner!"', speeches[40]);
+  Assign('"None may enter the sacred shrine!"', speeches[41]);
+  Assign('"You have earned the right to claim the prize."', speeches[42]);
+  Assign('"Simply Pathetic!" said the Necromancer.', speeches[43]);
+  Assign("The Necromancer was transformed into a normal man.", speeches[44]);
+  Assign('"Welcome. Here is a golden figurine you need."', speeches[45]);
+  Assign('"Look into my eyes and Die!!" hissed the witch.', speeches[46]);
+  Assign('"Bring me bones of the ancient King."', speeches[47]);
   Assign("% gave him the ancient bones.", speeches[48]);
   Assign("Well met, traveler.", speeches[49])
 END InitSpeeches;
@@ -219,23 +226,45 @@ BEGIN
   RETURN FALSE
 END LookAtNPC;
 
-(* Select speech index based on NPC race *)
+(* Select speech and apply side effects based on NPC race.
+   Returns speech index. Modifies inventory for one-time rewards. *)
 PROCEDURE SelectSpeech(race: INTEGER): INTEGER;
 BEGIN
   CASE race OF
-    0:  RETURN 27 |   (* wizard — random hint *)
-    1:  RETURN 36 |   (* priest *)
+    0:  RETURN 27 |   (* wizard — hint *)
+    1:  (* priest — Writ gates statue reward *)
+      IF HasStuff(StWrit) AND
+         (NOT priestStatueGiven) THEN
+        priestStatueGiven := TRUE;
+        GiveStuff(StStatue);
+        RETURN 39
+      ELSIF priestStatueGiven THEN
+        RETURN 37  (* "Seek the power of the Stones" *)
+      ELSIF brothers[activeBrother].brave > 30 THEN
+        (* Heal if brave enough *)
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
+        RETURN 38  (* "I shall Heal all your wounds" *)
+      ELSE
+        RETURN 40  (* "Repent, Sinner!" *)
+      END |
     4:  RETURN 16 |   (* princess *)
     5:  RETURN 17 |   (* king *)
     6:  RETURN 20 |   (* noble *)
-    7:  RETURN 45 |   (* sorceress *)
+    7:  (* sorceress — one-time statue *)
+      IF NOT sorceressStatueGiven THEN
+        sorceressStatueGiven := TRUE;
+        GiveStuff(StStatue);
+        RETURN 45  (* "Here is one of the golden figurines" *)
+      ELSE
+        RETURN 49  (* generic *)
+      END |
     8:  RETURN 12 |   (* bartender *)
     9:  RETURN 46 |   (* witch *)
    10:  RETURN 47 |   (* spectre *)
    12:  RETURN 22 |   (* ranger *)
    13:  RETURN 23     (* beggar *)
   ELSE
-    RETURN 49         (* generic *)
+    RETURN 49
   END
 END SelectSpeech;
 
@@ -254,6 +283,34 @@ BEGIN
   RETURN TRUE
 END TalkToNPC;
 
+PROCEDURE GiveToNPC(heroX, heroY, itemIdx: INTEGER;
+                    VAR response: ARRAY OF CHAR): BOOLEAN;
+VAR idx, race: INTEGER;
+BEGIN
+  idx := FindNearestNPC(heroX, heroY);
+  IF idx < 0 THEN RETURN FALSE END;
+  race := actors[idx].race;
+
+  (* Spectre (race 10): accepts Bone → drops Shard *)
+  IF (race = 10) AND (itemIdx = 29) AND
+     HasStuff(StBone) THEN
+    SetStuff(StBone, 0);
+    AddObj(actors[idx].absX, actors[idx].absY, 140, 1, -1);  (* Shard *)
+    Assign("% gave him the ancient bones.", response);
+    RETURN TRUE
+  END;
+
+  (* Beggar (race 13): accepts gold → kindness increase *)
+  IF (race = 13) AND (itemIdx = 31) THEN  (* gold *)
+    Assign("The beggar thanks you kindly.", response);
+    IncKind;
+    RETURN TRUE
+  END;
+
+  Assign("Sorry, I have no use for it.", response);
+  RETURN TRUE
+END GiveToNPC;
+
 PROCEDURE GetSpeech(idx: INTEGER; VAR text: ARRAY OF CHAR);
 BEGIN
   IF (idx >= 0) AND (idx < MaxSpeeches) THEN
@@ -267,6 +324,8 @@ PROCEDURE InitNPCs;
 VAR i: INTEGER;
 BEGIN
   FOR i := 0 TO 199 DO materialized[i] := FALSE END;
+  priestStatueGiven := FALSE;
+  sorceressStatueGiven := FALSE;
   InitSetfigTable;
   InitSpeeches
 END InitNPCs;

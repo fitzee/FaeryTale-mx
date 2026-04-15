@@ -10,4 +10,14 @@ PROCEDURE InitDoors;
 PROCEDURE CheckDoor(heroX, heroY, regionNum: INTEGER;
                     VAR newX, newY, newRegion: INTEGER): BOOLEAN;
 
+(* Open a door tile at the given position. Changes map sector byte
+   from closed to open variant. Returns TRUE if a door was opened. *)
+PROCEDURE OpenDoorTile(heroX, heroY: INTEGER): BOOLEAN;
+
+(* Restore any opened door tiles to their closed state *)
+PROCEDURE RestoreDoorTiles;
+
+(* Close doors if player has walked away *)
+PROCEDURE CheckCloseDoors(heroX, heroY: INTEGER);
+
 END Doors.

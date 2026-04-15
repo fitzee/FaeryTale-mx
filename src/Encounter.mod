@@ -8,7 +8,7 @@ FROM Actor IMPORT actors, actorCount, MaxActors,
                   TypeEnemy, StStill, StDead, StDying,
                   GoalAttack1, GoalAttack2, GoalArcher1, GoalArcher2;
 FROM Movement IMPORT ProxCheck;
-FROM Assets IMPORT currentRegion;
+FROM Assets IMPORT currentRegion, GetTerrainAt;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -217,8 +217,9 @@ BEGIN
     encX := heroX + (spawnDirX[dir] * dist) DIV 2;
     encY := heroY + (spawnDirY[dir] * dist) DIV 2;
 
-    (* Check terrain at encounter center is passable *)
-    IF ProxCheck(encX, encY, -1) = 0 THEN
+    (* Original: only spawn if px_to_im returns 0 (open terrain).
+       This prevents spawning inside buildings, walls, water etc. *)
+    IF (currentRegion >= 0) AND (GetTerrainAt(encX, encY) = 0) THEN
       (* Place individual enemies around this center *)
       spawned := 0;
       WHILE spawned < pendingCount DO

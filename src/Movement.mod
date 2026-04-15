@@ -1,6 +1,8 @@
 IMPLEMENTATION MODULE Movement;
 
 FROM Actor IMPORT actors, actorCount, StDead, StDying, TypeEnemy, TypeCarrier;
+FROM Brothers IMPORT brothers, activeBrother, StShard;
+FROM Doors IMPORT OpenDoorTile;
 FROM World IMPORT GetTerrain, IsPassable, TerrainSpeed;
 FROM Assets IMPORT currentRegion, IsBlocked, GetTerrainAt;
 
@@ -56,15 +58,26 @@ BEGIN
     t := GetTerrainAt(x + 4, y + 2);
     IF t = 1 THEN RETURN t END;
     IF t >= 10 THEN
-      IF (actorIdx = 0) AND (t = 15) THEN (* door *)
+      IF (actorIdx = 0) AND (t = 15) THEN
+        (* Door — open it like original doorfind, but BLOCK movement.
+           Original: proxcheck returns 15, movement fails, checkdev tries
+           alternate dirs. Door opens for next frame. *)
+        OpenDoorTile(x, y);
+        RETURN 15
+      ELSIF (actorIdx = 0) AND (t = 12) AND
+            (brothers[activeBrother].stuff[StShard] > 0) THEN
+        (* Shard allows passing barrier terrain *)
       ELSE RETURN t
       END
     END;
     t := GetTerrainAt(x - 4, y + 2);
     IF t = 1 THEN RETURN t END;
     IF t >= 8 THEN
-      IF (actorIdx = 0) AND ((t = 8) OR (t = 9) OR (t = 15)) THEN
-        (* player walks through swamp/palace/doors *)
+      IF (actorIdx = 0) AND ((t = 8) OR (t = 9)) THEN
+        (* player walks through swamp/palace *)
+      ELSIF (actorIdx = 0) AND (t = 15) THEN
+        OpenDoorTile(x, y);
+        RETURN 15
       ELSE RETURN t
       END
     END;
@@ -72,7 +85,9 @@ BEGIN
     t := GetTerrainAt(x, y);
     IF t = 1 THEN RETURN t END;
     IF t >= 10 THEN
-      IF (actorIdx = 0) AND (t = 15) THEN (* door *)
+      IF (actorIdx = 0) AND (t = 15) THEN
+        OpenDoorTile(x, y);
+        RETURN 15
       ELSE RETURN t
       END
     END

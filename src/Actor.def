@@ -15,6 +15,7 @@ CONST
   StFrozen   = 20;
   StFlying   = 21;
   StFall     = 22;
+  StSleep    = 23;
   StShoot1   = 24;
   StShoot3   = 25;
 

@@ -5,13 +5,15 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT PollInput, InputState, DirNone,
                     ScreenW, TextH, Scale;
 FROM Actor IMPORT actors, actorCount, InitAll,
-                  StWalking, StStill, StFighting, StDead, StDying,
-                  GoalAttack1, GoalStand;
+                  TypeEnemy,
+                  StWalking, StStill, StFighting, StDead, StDying, StShoot1,
+                  StSleep,
+                  GoalAttack1, GoalFlee, GoalStand;
 FROM World IMPORT InitWorld, TileSize, WorldW, WorldH, UpdateCamera,
                   GetTerrain, TerrSwamp, TerrWater, camX, camY;
 FROM Movement IMPORT MoveActor;
 FROM EnemyAI IMPORT UpdateEnemies;
-FROM Combat IMPORT UpdateCombat;
+FROM Combat IMPORT UpdateCombat, SearchBody;
 FROM Items IMPORT InitItems, CheckPickup, UseItem, InventoryCount,
                   AddToInventory, SpawnItem,
                   ItemNone, ItemGold, ItemFood, ItemPotion,
@@ -20,22 +22,23 @@ FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
                      lightlevel, MusicTickDue;
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
-                     activeBrother;
+                     activeBrother, GiveStuff, SetStuff, AddWealth,
+                     HasWeapon, HasStuff;
 FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
-                   GetTerrainAt;
+                   GetTerrainAt, GetSectorByte;
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
                  optionCount, MItems, MGame, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
 FROM Music IMPORT SetMood, StopMusic, MoodDay, MoodNight, MoodIndoor,
                   MoodBattle;
 FROM Platform IMPORT PlayH, Scale, ScreenW;
-FROM Doors IMPORT InitDoors, CheckDoor;
+FROM Doors IMPORT InitDoors, CheckDoor, OpenDoorTile, RestoreDoorTiles,
+                  CheckCloseDoors;
 FROM WorldObj IMPORT CheckObjectPickup, objects, objCount;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
-FROM Combat IMPORT SearchBody;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
 FROM Narration IMPORT InitPlace, UpdatePlace, Event;
 
@@ -48,14 +51,65 @@ VAR
   doorCooldown: INTEGER;
   battleFlag: BOOLEAN;
   prevBattle: BOOLEAN;
+  dayPeriod: INTEGER;
+  fatigue: INTEGER;
+  hunger: INTEGER;
+  sleepWait: INTEGER;
+  containerRng: INTEGER;
   nameBuf: ARRAY [0..31] OF CHAR;
-  msgBuf: ARRAY [0..63] OF CHAR;
+  msgBuf: ARRAY [0..79] OF CHAR;
+
+  (* Treasure probability table *)
+  treasureProbs: ARRAY [0..39] OF INTEGER;
+
+PROCEDURE InitTreasureProbs;
+BEGIN
+  treasureProbs[0] := 0; treasureProbs[1] := 0; treasureProbs[2] := 0;
+  treasureProbs[3] := 0; treasureProbs[4] := 0; treasureProbs[5] := 0;
+  treasureProbs[6] := 0; treasureProbs[7] := 0;
+  treasureProbs[8] := 9; treasureProbs[9] := 11; treasureProbs[10] := 13;
+  treasureProbs[11] := 31; treasureProbs[12] := 31; treasureProbs[13] := 17;
+  treasureProbs[14] := 17; treasureProbs[15] := 32;
+  treasureProbs[16] := 12; treasureProbs[17] := 14; treasureProbs[18] := 20;
+  treasureProbs[19] := 20; treasureProbs[20] := 20; treasureProbs[21] := 31;
+  treasureProbs[22] := 33; treasureProbs[23] := 31;
+  treasureProbs[24] := 10; treasureProbs[25] := 10; treasureProbs[26] := 16;
+  treasureProbs[27] := 16; treasureProbs[28] := 11; treasureProbs[29] := 17;
+  treasureProbs[30] := 18; treasureProbs[31] := 19;
+  treasureProbs[32] := 15; treasureProbs[33] := 21; treasureProbs[34] := 0;
+  treasureProbs[35] := 0; treasureProbs[36] := 0; treasureProbs[37] := 0;
+  treasureProbs[38] := 0; treasureProbs[39] := 0
+END InitTreasureProbs;
+
+PROCEDURE GoldValue(stuffIdx: INTEGER): INTEGER;
+BEGIN
+  CASE stuffIdx OF 31: RETURN 2 | 32: RETURN 5 | 33: RETURN 10 | 34: RETURN 100
+  ELSE RETURN 0 END
+END GoldValue;
+
+PROCEDURE TreasureGroup(race: INTEGER): INTEGER;
+BEGIN
+  CASE race OF
+    0: RETURN 2 | 1: RETURN 1 | 2: RETURN 4 | 3: RETURN 3
+  ELSE RETURN 0 END
+END TreasureGroup;
+
+PROCEDURE IntToStr(n: INTEGER; VAR buf: ARRAY OF CHAR);
+VAR i, len: INTEGER; tmp: ARRAY [0..7] OF CHAR;
+BEGIN
+  IF n < 0 THEN n := 0 END; len := 0;
+  IF n = 0 THEN tmp[0] := '0'; len := 1
+  ELSE WHILE n > 0 DO tmp[len] := CHR(ORD('0') + (n MOD 10)); n := n DIV 10; INC(len) END
+  END;
+  FOR i := 0 TO len - 1 DO buf[i] := tmp[len - 1 - i] END;
+  buf[len] := 0C
+END IntToStr;
 
 PROCEDURE InitGame;
 BEGIN
   running := TRUE;
   cycle := 0;
-  dayNight := 6000;  (* midday — full bright, matching DayNight.InitDayNight *)
+  dayNight := 12000;
   msgTimer := 0;
   msgText[0] := 0C;
   potionCooldown := 0;
@@ -65,6 +119,11 @@ BEGIN
   battleFlag := FALSE;
   prevBattle := FALSE;
   viewStatus := 0;
+  dayPeriod := 6;
+  fatigue := 0;
+  hunger := 0;
+  sleepWait := 0;
+  containerRng := 31337;
 
   InitWorld;
   InitAll;
@@ -76,25 +135,23 @@ BEGIN
   InitNPCs;
   InitEncounters;
   InitMissiles;
+  InitTreasureProbs;
 
-  (* Place player from active brother data *)
   RestoreBrotherState;
+  actorCount := 1;
 
-  actorCount := 1; (* just the player for now *);
-
-  (* Preload all game assets at startup — no loading during gameplay *)
   InitAssets;
   IF PreloadAll() THEN
     IF NOT LoadHUD(ScreenW * Scale, TextH * Scale) THEN
       WriteString("*** HUD LOAD FAILED ***"); WriteLn
     END;
-    (* Start at Tambry village — original starting position *)
     SwitchRegion(3);
     actors[0].absX := 19036;
     actors[0].absY := 15755;
     InitPlace(actors[0].absX, actors[0].absY, 3);
-    Event(9);   (* "Julian started the journey in his home village of Tambry" *)
-    Event(30)   (* "It was midday." *)
+    Event(9);
+    Event(30);
+    SetOptions
   ELSE
     ShowMessage("Welcome! (placeholder mode)")
   END
@@ -105,20 +162,17 @@ VAR buf: ARRAY [0..79] OF CHAR;
     si, di, ni: INTEGER;
     name: ARRAY [0..15] OF CHAR;
 BEGIN
-  (* Expand '%' to current brother name *)
   ActiveName(name);
   si := 0; di := 0;
   WHILE (si <= HIGH(msg)) AND (msg[si] # 0C) AND (di < 79) DO
     IF msg[si] = '%' THEN
       ni := 0;
       WHILE (ni <= HIGH(name)) AND (name[ni] # 0C) AND (di < 79) DO
-        buf[di] := name[ni];
-        INC(di); INC(ni)
+        buf[di] := name[ni]; INC(di); INC(ni)
       END;
       INC(si)
     ELSE
-      buf[di] := msg[si];
-      INC(di); INC(si)
+      buf[di] := msg[si]; INC(di); INC(si)
     END
   END;
   buf[di] := 0C;
@@ -127,71 +181,36 @@ BEGIN
   AddLogLine(buf)
 END ShowMessage;
 
-PROCEDURE HandlePickup;
-VAR picked: INTEGER;
-BEGIN
-  picked := CheckPickup(actors[0].absX, actors[0].absY);
-  IF picked # ItemNone THEN
-    CASE picked OF
-      ItemGold:   ShowMessage("Found gold!") |
-      ItemFood:   ShowMessage("Found food!") |
-      ItemKey:    ShowMessage("Found a key!") |
-      ItemSword:
-        ShowMessage("Found a sword!");
-        actors[0].weapon := 3 |
-      ItemShield: ShowMessage("Found a shield!") |
-      ItemPotion: ShowMessage("Found a potion!") |
-      ItemGem:    ShowMessage("Found a gem!") |
-      ItemScroll: ShowMessage("Found a scroll!")
-    ELSE
-      ShowMessage("Found something!")
-    END;
-    SetOptions
-  END
-END HandlePickup;
-
 PROCEDURE ShowInventory;
-BEGIN
-  viewStatus := 4
-END ShowInventory;
+BEGIN viewStatus := 4 END ShowInventory;
 
 PROCEDURE HandleLook;
 VAR i, dx, dy, found: INTEGER;
 BEGIN
-  (* Original: search for hidden objects (status=0 or status=5) within
-     distance 40 and reveal them (set status=1 = visible/pickupable).
-     status=5 = "look-only" items hidden in fireplaces, cabinets etc. *)
   found := 0;
   FOR i := 0 TO objCount - 1 DO
     IF ((objects[i].status = 0) OR (objects[i].status = 5)) AND
-       ((objects[i].region = currentRegion) OR
-        (objects[i].region = -1)) THEN
+       ((objects[i].region = currentRegion) OR (objects[i].region = -1)) THEN
       dx := actors[0].absX - objects[i].x;
       dy := actors[0].absY - objects[i].y;
       IF (dx > -40) AND (dx < 40) AND (dy > -40) AND (dy < 40) THEN
-        objects[i].status := 1;
-        found := 1
+        objects[i].status := 1; found := 1
       END
     END
   END;
-  IF found > 0 THEN
-    Event(38)  (* "% discovered a hidden object." *)
+  IF found > 0 THEN Event(38)
   ELSE
-    (* No hidden objects — describe nearest NPC if any *)
     IF LookAtNPC(actors[0].absX, actors[0].absY, nameBuf) THEN
       Assign("% sees ", msgBuf);
       Concat(msgBuf, nameBuf, msgBuf);
       Concat(msgBuf, ".", msgBuf);
       ShowMessage(msgBuf)
-    ELSE
-      Event(20)  (* "% looked around but discovered nothing." *)
-    END
+    ELSE Event(20) END
   END
 END HandleLook;
 
 PROCEDURE TogglePause;
 BEGIN
-  (* Toggle bit 0 of menus[GAME].enabled[5], matching original XOR toggle *)
   IF BAND(CARDINAL(menus[MGame].enabled[5]), 1) = 0 THEN
     menus[MGame].enabled[5] := BOR(INTEGER(CARDINAL(menus[MGame].enabled[5])), 1);
     ShowMessage("Game paused.")
@@ -203,7 +222,6 @@ END TogglePause;
 
 PROCEDURE ToggleMusic;
 BEGIN
-  (* Toggle bit 0 of menus[GAME].enabled[6], then setmood *)
   IF BAND(CARDINAL(menus[MGame].enabled[6]), 1) = 0 THEN
     menus[MGame].enabled[6] := BOR(INTEGER(CARDINAL(menus[MGame].enabled[6])), 1);
     SetMood(MoodDay)
@@ -213,106 +231,32 @@ BEGIN
   END
 END ToggleMusic;
 
-PROCEDURE HandleMenuClick(mx, my: INTEGER);
-CONST
-  (* Original propt() layout in 640x57 HUD space:
-     Col0=430, Col1=482, each 48px wide (6*8), row = (j/2)*9 + 8. *)
-  HudW = 640;
-VAR hx, hy, col, row, itemIdx, optIdx: INTEGER;
-BEGIN
-  (* Convert screen mouse coords to 640x57 HUD space *)
-  hx := mx * HudW DIV (ScreenW * Scale);
-  hy := (my - PlayH * Scale) DIV Scale;
-
-  (* Check if click is in menu panel *)
-  IF hy < PanelY THEN RETURN END;
-  IF hx < PanelX THEN RETURN END;
-  IF hx >= PanelX + BtnW * 2 THEN RETURN END;
-
-  (* Determine column and row relative to panel *)
-  col := (hx - PanelX) DIV BtnW;
-  row := (hy - PanelY) DIV BtnH;
-  IF row < 0 THEN RETURN END;
-  IF row > 5 THEN RETURN END;
-
-  (* Map to menu item index *)
-  itemIdx := row * 2 + col;
-  IF itemIdx >= optionCount THEN RETURN END;
-
-  optIdx := realOptions[itemIdx];
-  IF optIdx < 0 THEN RETURN END;
-
-  (* Tab items (0-4) switch menu mode *)
-  IF optIdx < 5 THEN
-    GoMenu(optIdx);
-    RETURN
-  END;
-
-  (* Sub-items: execute the action based on current menu mode *)
-  CASE cmode OF
-    0: (* Items menu *)
-      CASE optIdx OF
-        5: ShowInventory |               (* List *)
-        6: HandleWorldPickup |           (* Take *)
-        7: HandleLook |                  (* Look *)
-        8: GoMenu(8) |                   (* Use → USE menu *)
-        9: GoMenu(7)                     (* Give → GIVE menu *)
-      ELSE
-      END |
-    2: (* Talk menu *)
-      CASE optIdx OF
-        5: ShowMessage("You yell loudly!") |   (* Yell *)
-        6: HandleTalk |                         (* Say *)
-        7: ShowMessage("You ask around...")     (* Ask *)
-      ELSE
-      END |
-    4: (* Game menu *)
-      CASE optIdx OF
-        5: TogglePause |     (* Pause *)
-        6: ToggleMusic |     (* Music *)
-        7: (* Sound toggle — not yet *) |
-        8: running := FALSE | (* Quit *)
-        9: ShowMessage("Load not implemented")  (* Load *)
-      ELSE
-      END |
-    8: (* Use menu — weapon equipping.
-          Original: hit < 5 → weapon = hit+1 if owned *)
-      IF optIdx < 10 THEN
-        (* optIdx 5-9 maps to USE menu items 0-4 = weapon codes 1-5 *)
-        IF (optIdx >= 5) AND (optIdx <= 9) THEN
-          IF brothers[activeBrother].weaponInv[optIdx - 4] > 0 THEN
-            actors[0].weapon := optIdx - 4;
-            WeaponName(optIdx - 4, nameBuf);
-            Assign("Equipped ", msgBuf);
-            Concat(msgBuf, nameBuf, msgBuf);
-            Concat(msgBuf, ".", msgBuf);
-            ShowMessage(msgBuf)
-          ELSE
-            ShowMessage("You don't have one.")
-          END;
-          GoMenu(0)  (* return to Items menu *)
-        END
-      END
-  ELSE
-  END
-END HandleMenuClick;
-
 PROCEDURE WeaponName(w: INTEGER; VAR name: ARRAY OF CHAR);
 BEGIN
   CASE w OF
-    1: Assign("a dagger", name) |
-    2: Assign("a mace", name) |
-    3: Assign("a sword", name) |
-    4: Assign("a bow", name) |
+    1: Assign("a dagger", name) | 2: Assign("a mace", name) |
+    3: Assign("a sword", name) | 4: Assign("a bow", name) |
     5: Assign("a wand", name)
-  ELSE
-    Assign("a weapon", name)
-  END
+  ELSE Assign("a weapon", name) END
 END WeaponName;
 
+PROCEDURE TreasureName(ti: INTEGER; VAR name: ARRAY OF CHAR);
+BEGIN
+  CASE ti OF
+     9: Assign("a Blue Stone", name) | 10: Assign("a Green Jewel", name) |
+    11: Assign("a Glass Vial", name) | 12: Assign("a Crystal Orb", name) |
+    13: Assign("a Bird Totem", name) | 14: Assign("a Gold Ring", name) |
+    15: Assign("a Jade Skull", name) | 16: Assign("a Gold Key", name) |
+    17: Assign("a Green Key", name) | 18: Assign("a Blue Key", name) |
+    19: Assign("a Red Key", name) | 20: Assign("a Grey Key", name) |
+    21: Assign("a White Key", name)
+  ELSE Assign("a treasure", name) END
+END TreasureName;
+
 PROCEDURE SearchNearbyCorpses;
-VAR i, dx, dy, w: INTEGER;
-    wname: ARRAY [0..15] OF CHAR;
+VAR i, dx, dy, w, race, tg, ti, gv: INTEGER;
+    wname, tname: ARRAY [0..31] OF CHAR;
+    hasWeapon, hasTreasure: BOOLEAN;
 BEGIN
   FOR i := 1 TO actorCount - 1 DO
     IF actors[i].state = StDead THEN
@@ -321,67 +265,131 @@ BEGIN
       IF dx < 0 THEN dx := -dx END;
       IF dy < 0 THEN dy := -dy END;
       IF (dx < 20) AND (dy < 20) THEN
-        w := SearchBody(i);
-        IF w > 0 THEN
-          IF (w >= 1) AND (w <= 5) THEN
-            INC(brothers[activeBrother].weaponInv[w]);
-            WeaponName(w, wname);
-            Assign("Found ", msgBuf);
-            Concat(msgBuf, wname, msgBuf);
-            Concat(msgBuf, "!", msgBuf);
-            ShowMessage(msgBuf);
-            IF w > actors[0].weapon THEN
-              actors[0].weapon := w;
-              Assign("Equipped ", msgBuf);
-              Concat(msgBuf, wname, msgBuf);
-              Concat(msgBuf, ".", msgBuf);
-              ShowMessage(msgBuf)
-            END
-          END;
-          SetOptions;
-          RETURN
-        ELSE
-          ShowMessage("The body was empty.")
+        IF actors[i].tactic = -1 THEN
+          ShowMessage("% searched the body and found nothing."); RETURN
         END;
-        RETURN
+        hasWeapon := FALSE; hasTreasure := FALSE;
+        w := SearchBody(i);
+        IF (w >= 1) AND (w <= 5) THEN
+          INC(brothers[activeBrother].weaponInv[w]);
+          WeaponName(w, wname); hasWeapon := TRUE;
+          IF w > actors[0].weapon THEN actors[0].weapon := w END
+        END;
+        race := actors[i].race; ti := 0;
+        IF race < 128 THEN
+          tg := TreasureGroup(race);
+          ti := tg * 8 + (cycle MOD 8);
+          IF (ti >= 0) AND (ti <= 39) THEN ti := treasureProbs[ti] ELSE ti := 0 END
+        END;
+        IF ti > 0 THEN
+          hasTreasure := TRUE;
+          IF ti >= 31 THEN
+            gv := GoldValue(ti); AddWealth(gv);
+            IntToStr(gv, tname); Concat(tname, " Gold Pieces", tname)
+          ELSE GiveStuff(ti); TreasureName(ti, tname) END
+        END;
+        Assign("% searched the body and found ", msgBuf);
+        IF hasWeapon THEN
+          Concat(msgBuf, wname, msgBuf);
+          IF hasTreasure THEN Concat(msgBuf, " and ", msgBuf); Concat(msgBuf, tname, msgBuf) END
+        ELSIF hasTreasure THEN Concat(msgBuf, tname, msgBuf)
+        ELSE Concat(msgBuf, "nothing", msgBuf) END;
+        Concat(msgBuf, ".", msgBuf);
+        ShowMessage(msgBuf);
+        actors[i].tactic := -1;
+        SetOptions; RETURN
       END
     END
   END;
   ShowMessage("Nothing to take.")
 END SearchNearbyCorpses;
 
-PROCEDURE ContainerLoot;
-(* Original: rand4() for 0-3 items from containers.
-   Matching original container interaction. *)
-VAR roll, item: INTEGER;
+PROCEDURE RandContainer(limit: INTEGER): INTEGER;
 BEGIN
-  roll := (cycle * 1103515245 + 12345) DIV 65536;
-  IF roll < 0 THEN roll := -roll END;
-  roll := roll MOD 4;
-  IF roll = 0 THEN
-    ShowMessage("It was empty.")
-  ELSE
-    (* Give gold + random item *)
-    AddToInventory(ItemGold);
-    ShowMessage("Found some gold!");
-    IF roll >= 2 THEN
-      AddToInventory(ItemFood);
-      ShowMessage("Found some food!")
+  containerRng := containerRng * 1103515245 + 12345;
+  IF containerRng < 0 THEN containerRng := -containerRng END;
+  IF limit <= 0 THEN RETURN 0 END;
+  RETURN (containerRng DIV 65536) MOD limit
+END RandContainer;
+
+PROCEDURE PickContainerItem(): INTEGER;
+VAR i: INTEGER;
+BEGIN
+  i := RandContainer(8) + 8;
+  IF i = 8 THEN i := 9 END;
+  RETURN i
+END PickContainerItem;
+
+PROCEDURE ContainerLoot;
+VAR k, i, j, gv: INTEGER;
+    tname, numStr: ARRAY [0..31] OF CHAR;
+BEGIN
+  k := RandContainer(4);
+  IF k = 0 THEN ShowMessage("nothing.")
+  ELSIF k = 1 THEN
+    i := PickContainerItem();
+    GiveStuff(i); TreasureName(i, tname);
+    Assign("a ", msgBuf); Concat(msgBuf, tname, msgBuf); Concat(msgBuf, ".", msgBuf);
+    ShowMessage(msgBuf)
+  ELSIF k = 2 THEN
+    i := PickContainerItem();
+    IF i = 8 THEN
+      gv := 100; AddWealth(gv);
+      IntToStr(gv, numStr); Assign(numStr, msgBuf); Concat(msgBuf, " Gold Pieces", msgBuf)
+    ELSE GiveStuff(i); TreasureName(i, tname); Assign("a ", msgBuf); Concat(msgBuf, tname, msgBuf)
     END;
-    IF roll >= 3 THEN
-      item := (cycle MOD 4) + 3;  (* key, sword, shield, or potion *)
-      AddToInventory(item);
-      CASE item OF
-        3: ShowMessage("Found a key!") |
-        4: ShowMessage("Found a sword!") |
-        5: ShowMessage("Found a shield!") |
-        6: ShowMessage("Found a potion!")
-      ELSE
-        ShowMessage("Found something!")
-      END
-    END
+    j := PickContainerItem();
+    WHILE j = i DO j := PickContainerItem() END;
+    GiveStuff(j); TreasureName(j, tname);
+    Concat(msgBuf, " and a ", msgBuf); Concat(msgBuf, tname, msgBuf);
+    Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
+  ELSE
+    ShowMessage("3 keys.");
+    FOR i := 0 TO 2 DO j := RandContainer(6) + 16; GiveStuff(j) END
   END
 END ContainerLoot;
+
+PROCEDURE HandleMenuClick(mx, my: INTEGER);
+CONST HudW = 640;
+VAR hx, hy, col, row, itemIdx, optIdx: INTEGER;
+BEGIN
+  hx := mx * HudW DIV (ScreenW * Scale);
+  hy := (my - PlayH * Scale) DIV Scale;
+  IF hy < PanelY THEN RETURN END;
+  IF hx < PanelX THEN RETURN END;
+  IF hx >= PanelX + BtnW * 2 THEN RETURN END;
+  col := (hx - PanelX) DIV BtnW;
+  row := (hy - PanelY) DIV BtnH;
+  IF row < 0 THEN RETURN END;
+  IF row > 5 THEN RETURN END;
+  itemIdx := row * 2 + col;
+  IF itemIdx >= optionCount THEN RETURN END;
+  optIdx := realOptions[itemIdx];
+  IF optIdx < 0 THEN RETURN END;
+  IF optIdx < 5 THEN GoMenu(optIdx); RETURN END;
+  CASE cmode OF
+    0: CASE optIdx OF
+        5: ShowInventory | 6: HandleWorldPickup | 7: HandleLook |
+        8: GoMenu(8) | 9: GoMenu(7)
+      ELSE END |
+    2: CASE optIdx OF
+        5: HandleYell | 6: HandleTalk | 7: HandleTalk
+      ELSE END |
+    4: CASE optIdx OF
+        5: TogglePause | 6: ToggleMusic | 7: |
+        8: running := FALSE | 9: ShowMessage("Load not implemented")
+      ELSE END |
+    8: IF (optIdx >= 5) AND (optIdx <= 9) THEN
+        IF HasWeapon(optIdx - 4) THEN
+          actors[0].weapon := optIdx - 4;
+          WeaponName(optIdx - 4, nameBuf);
+          Assign("Equipped ", msgBuf); Concat(msgBuf, nameBuf, msgBuf);
+          Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
+        ELSE ShowMessage("You don't have one.") END;
+        GoMenu(0)
+      END
+  ELSE END
+END HandleMenuClick;
 
 PROCEDURE HandleWorldPickup;
 VAR id: INTEGER;
@@ -389,339 +397,296 @@ BEGIN
   id := CheckObjectPickup(actors[0].absX, actors[0].absY);
   IF id >= 0 THEN
     CASE id OF
-      13:
-        ShowMessage("Found 50 gold pieces!");
-        AddToInventory(ItemGold);
-        AddToInventory(ItemGold) |
-      14: (* urn — container *)
-        ShowMessage("Opened a brass urn.");
-        ContainerLoot |
-      15: (* chest — container *)
-        ShowMessage("Opened a chest.");
-        ContainerLoot |
-      16: (* sacks — container *)
-        ShowMessage("Opened some sacks.");
-        ContainerLoot |
-      17: ShowMessage("Found a gold ring!");
-          AddToInventory(ItemShield) |     (* reuse Shield slot for ring *)
-      18: ShowMessage("Found a blue stone!");
-          AddToInventory(ItemGem) |
-      19: ShowMessage("Found a gold jewel!");
-          AddToInventory(ItemGem) |
-      20: ShowMessage("Found a scrap of paper!");
-          AddToInventory(ItemScroll) |
-      22: ShowMessage("Found a vial!");
-          AddToInventory(ItemPotion) |
-      23: ShowMessage("Found a totem!");
-          AddToInventory(ItemScroll) |
-      24: ShowMessage("Found a skull!");
-          AddToInventory(ItemScroll) |
-      25: ShowMessage("Found a gold key!");
-          AddToInventory(ItemKey) |
-      26: ShowMessage("Found a grey key!");
-          AddToInventory(ItemKey) |
+      13: ShowMessage("Found 50 gold pieces!"); AddWealth(50) |
+      14: ShowMessage("Opened a brass urn."); ContainerLoot |
+      15: ShowMessage("Opened a chest."); ContainerLoot |
+      16: ShowMessage("Opened some sacks."); ContainerLoot |
+      17: ShowMessage("Found a gold ring!"); GiveStuff(14) |
+      18: ShowMessage("Found a blue stone!"); GiveStuff(9) |
+      19: ShowMessage("Found a gold jewel!"); GiveStuff(10) |
+      20: ShowMessage("Found a scrap of paper!"); GiveStuff(20) |
+      22: ShowMessage("Found a vial!"); GiveStuff(11) |
+      23: ShowMessage("Found a totem!"); GiveStuff(13) |
+      24: ShowMessage("Found a skull!"); GiveStuff(15) |
+      25: ShowMessage("Found a gold key!"); GiveStuff(16) |
+      26: ShowMessage("Found a grey key!"); GiveStuff(20) |
      102: ShowMessage("Found a turtle!") |
-     114: ShowMessage("Found a blue key!");
-          AddToInventory(ItemKey) |
-     145: ShowMessage("Found a magic wand!");
-          brothers[activeBrother].weaponInv[5] := 1 |
-     148: ShowMessage("Found some fruit!");
-          AddToInventory(ItemFood) |
-     149: ShowMessage("Found a gold statue!");
-          AddToInventory(ItemGold);
-          AddToInventory(ItemGold);
-          AddToInventory(ItemGold) |
-     151: ShowMessage("Found a shell!");
-          AddToInventory(ItemShield) |
-     153: ShowMessage("Found a green key!");
-          AddToInventory(ItemKey) |
-     154: ShowMessage("Found a white key!");
-          AddToInventory(ItemKey) |
-     242: ShowMessage("Found a red key!");
-          AddToInventory(ItemKey)
-    ELSE
-      ShowMessage("Found something!")
-    END;
+     114: ShowMessage("Found a blue key!"); GiveStuff(18) |
+     145: ShowMessage("Found a magic wand!"); SetStuff(4, 1) |
+     148: ShowMessage("Found some fruit!"); GiveStuff(24) |
+     151: ShowMessage("Found a shell!"); GiveStuff(6) |
+     153: ShowMessage("Found a green key!"); GiveStuff(17) |
+     154: ShowMessage("Found a white key!"); GiveStuff(21) |
+     242: ShowMessage("Found a red key!"); GiveStuff(19) |
+      27: ShowMessage("% found the Golden Lasso!"); SetStuff(5, 1) |
+     138: ShowMessage("% found the King's Bone!"); SetStuff(29, 1) |
+     139: ShowMessage("% found the Talisman!"); SetStuff(22, 1);
+          ShowMessage("The quest is complete!") |
+     140: ShowMessage("% found a Shard!"); SetStuff(30, 1) |
+     149: ShowMessage("Found a gold statue!"); GiveStuff(25)
+    ELSE ShowMessage("Found something!") END;
     SetOptions
-  ELSE
-    (* No world object found — try searching dead enemy corpses *)
-    SearchNearbyCorpses
-  END
+  ELSE SearchNearbyCorpses END
 END HandleWorldPickup;
 
 PROCEDURE HandleTalk;
 VAR speech: ARRAY [0..127] OF CHAR;
 BEGIN
-  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN
-    ShowMessage(speech)
-  ELSE
-    ShowMessage("Nobody to talk to here.")
-  END
+  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN ShowMessage(speech)
+  ELSE ShowMessage("Nobody to talk to here.") END
 END HandleTalk;
+
+PROCEDURE HandleYell;
+VAR speech: ARRAY [0..127] OF CHAR;
+BEGIN
+  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN
+    ShowMessage('"No need to shout, son!" he said.')
+  ELSE ShowMessage("Nobody to talk to here.") END
+END HandleYell;
 
 PROCEDURE CheckEnvironment;
 VAR terrain: INTEGER;
 BEGIN
-  IF currentRegion >= 0 THEN RETURN END; (* skip for asset-based world *)
+  IF currentRegion >= 0 THEN RETURN END;
   terrain := GetTerrain(actors[0].absX, actors[0].absY);
-
-  (* Swamp damage like original fiery_death zones *)
   IF terrain = TerrSwamp THEN
     IF (cycle MOD 30) = 0 THEN
       DEC(actors[0].vitality, 1);
       IF actors[0].vitality <= 0 THEN
-        actors[0].state := StDying;
-        ShowMessage("The swamp claims you...")
-      ELSIF (cycle MOD 90) = 0 THEN
-        ShowMessage("The swamp drains your strength...")
-      END
+        actors[0].state := StDying; ShowMessage("The swamp claims you...")
+      ELSIF (cycle MOD 90) = 0 THEN ShowMessage("The swamp drains your strength...") END
     END
   END
 END CheckEnvironment;
 
-PROCEDURE CheckEnemyDrops;
-VAR i: INTEGER;
+(* --- Sleep/Fatigue system --- *)
+
+PROCEDURE CheckBedTile;
+VAR sec: INTEGER;
 BEGIN
-  (* When enemies die, sometimes drop loot *)
-  FOR i := 1 TO actorCount - 1 DO
-    IF actors[i].state = StDying THEN
-      (* Drop gold on death *)
-      SpawnItem(actors[i].absX, actors[i].absY, ItemGold);
-      (* Some enemies drop extra loot *)
-      IF actors[i].race = 0 THEN
-        SpawnItem(actors[i].absX + 8, actors[i].absY, ItemFood)
-      ELSIF actors[i].race = 2 THEN
-        SpawnItem(actors[i].absX - 8, actors[i].absY, ItemPotion)
+  IF currentRegion # 8 THEN sleepWait := 0; RETURN END;
+  sec := GetSectorByte(actors[0].absX, actors[0].absY);
+  IF (sec = 161) OR (sec = 52) OR (sec = 162) OR (sec = 53) THEN
+    INC(sleepWait);
+    IF sleepWait = 30 THEN
+      IF fatigue < 50 THEN Event(25)
+      ELSE
+        Event(26);
+        actors[0].absY := BOR(INTEGER(CARDINAL(actors[0].absY)), 31);
+        actors[0].state := StSleep
       END
     END
+  ELSE sleepWait := 0 END
+END CheckBedTile;
+
+PROCEDURE UpdateSleep;
+BEGIN
+  IF actors[0].state # StSleep THEN RETURN END;
+  INC(dayNight, 63);
+  IF dayNight >= 24000 THEN DEC(dayNight, 24000) END;
+  IF fatigue > 0 THEN DEC(fatigue) END;
+  IF (fatigue = 0) OR
+     ((fatigue < 30) AND (dayNight > 9000) AND (dayNight < 10000)) OR
+     (battleFlag AND (cycle MOD 64 = 0)) THEN
+    actors[0].state := StStill;
+    actors[0].absY := BAND(CARDINAL(actors[0].absY), 65504);
+    Event(14)
   END
-END CheckEnemyDrops;
+END UpdateSleep;
+
+PROCEDURE UpdateFatigue;
+BEGIN
+  IF actors[0].state = StSleep THEN RETURN END;
+  IF actors[0].vitality < 1 THEN RETURN END;
+  IF BAND(CARDINAL(dayNight), 127) # 0 THEN RETURN END;
+  INC(hunger); INC(fatigue);
+  IF hunger = 35 THEN Event(0)
+  ELSIF hunger = 60 THEN Event(1)
+  ELSIF BAND(CARDINAL(hunger), 7) = 0 THEN
+    IF actors[0].vitality > 5 THEN
+      IF (hunger > 100) OR (fatigue > 160) THEN DEC(actors[0].vitality, 2) END;
+      IF hunger > 90 THEN Event(2) END
+    ELSIF fatigue > 170 THEN Event(12); actors[0].state := StSleep
+    ELSIF hunger > 140 THEN Event(24); hunger := 130; actors[0].state := StSleep
+    END
+  END;
+  IF fatigue = 70 THEN Event(3)
+  ELSIF fatigue = 90 THEN Event(4) END
+END UpdateFatigue;
+
+(* --- Battle aftermath --- *)
+
+PROCEDURE BattleAftermath;
+VAR i, dx, dy, dead, flee: INTEGER;
+    numStr: ARRAY [0..7] OF CHAR;
+BEGIN
+  IF actors[0].vitality < 1 THEN RETURN END;
+  dead := 0; flee := 0;
+  FOR i := 1 TO actorCount - 1 DO
+    IF actors[i].actorType = TypeEnemy THEN
+      dx := actors[i].absX - actors[0].absX;
+      dy := actors[i].absY - actors[0].absY;
+      IF dx < 0 THEN dx := -dx END;
+      IF dy < 0 THEN dy := -dy END;
+      IF (dx < 300) AND (dy < 300) THEN
+        IF actors[i].state = StDead THEN INC(dead)
+        ELSIF actors[i].goal = GoalFlee THEN INC(flee) END
+      END
+    END
+  END;
+  IF (actors[0].vitality < 5) AND (dead > 0) THEN ShowMessage("Bravely done!")
+  ELSE
+    IF dead > 0 THEN
+      IntToStr(dead, numStr); Assign(numStr, msgBuf);
+      Concat(msgBuf, " foes were defeated in battle.", msgBuf); ShowMessage(msgBuf)
+    END;
+    IF flee > 0 THEN
+      IntToStr(flee, numStr); Assign(numStr, msgBuf);
+      Concat(msgBuf, " foes fled in retreat.", msgBuf); ShowMessage(msgBuf)
+    END
+  END
+END BattleAftermath;
 
 PROCEDURE UpdatePlayer;
 BEGIN
-  IF input.quit THEN
-    running := FALSE;
-    RETURN
-  END;
-
+  IF input.quit THEN running := FALSE; RETURN END;
+  IF actors[0].state = StSleep THEN RETURN END;
   IF actors[0].state = StDead THEN
     IF deathTimer = 0 THEN
-      ActiveName(nameBuf);
-      Assign(nameBuf, msgBuf);
-      Concat(msgBuf, " has fallen!", msgBuf);
-      ShowMessage(msgBuf);
-      deathTimer := 120
+      ActiveName(nameBuf); Assign(nameBuf, msgBuf);
+      Concat(msgBuf, " has fallen!", msgBuf); ShowMessage(msgBuf); deathTimer := 120
     ELSIF deathTimer = 1 THEN
       IF SwitchToNext() THEN
-        ActiveName(nameBuf);
-        Assign(nameBuf, msgBuf);
-        Concat(msgBuf, " takes up the quest!", msgBuf);
-        ShowMessage(msgBuf);
-        deathTimer := 0
-      ELSE
-        ShowMessage("All brothers have fallen... Game Over.");
-        deathTimer := -1
-      END
+        ActiveName(nameBuf); Assign(nameBuf, msgBuf);
+        Concat(msgBuf, " takes up the quest!", msgBuf); ShowMessage(msgBuf); deathTimer := 0
+      ELSE ShowMessage("All brothers have fallen... Game Over."); deathTimer := -1 END
     END;
     IF deathTimer > 0 THEN DEC(deathTimer) END;
     RETURN
   END;
-
   IF potionCooldown > 0 THEN DEC(potionCooldown) END;
-
-  (* Use potion with P key *)
   IF input.usePotion AND (potionCooldown = 0) THEN
     IF UseItem(ItemPotion) THEN
       INC(actors[0].vitality, 30);
       IF actors[0].vitality > 100 THEN actors[0].vitality := 100 END;
-      ShowMessage("Potion restores your health!");
-      potionCooldown := 30
-    ELSE
-      ShowMessage("No potions!");
-      potionCooldown := 30
-    END
+      ShowMessage("Potion restores your health!"); potionCooldown := 30
+    ELSE ShowMessage("No potions!"); potionCooldown := 30 END
   END;
-
-  (* Use food with F key *)
   IF input.useFood AND (potionCooldown = 0) THEN
     IF UseItem(ItemFood) THEN
       INC(actors[0].vitality, 10);
       IF actors[0].vitality > 100 THEN actors[0].vitality := 100 END;
-      ShowMessage("You eat some food.");
-      potionCooldown := 30
-    ELSE
-      ShowMessage("No food!");
-      potionCooldown := 30
-    END
+      IF hunger > 30 THEN DEC(hunger, 30) ELSE hunger := 0 END;
+      ShowMessage("You eat some food."); potionCooldown := 30
+    ELSE ShowMessage("No food!"); potionCooldown := 30 END
   END;
-
-  (* Talk to NPCs *)
-  IF input.talk AND (potionCooldown = 0) THEN
-    HandleTalk;
-    potionCooldown := 30
-  END;
-
+  IF input.talk AND (potionCooldown = 0) THEN HandleTalk; potionCooldown := 30 END;
   IF input.attack THEN
-    (* Ranged weapons (bow=4, wand=5) fire projectiles *)
     IF (actors[0].weapon >= 4) AND (actors[0].state # StShoot1) THEN
-      actors[0].state := StShoot1;
-      FireMissile(0);
-      actors[0].velX := 0;
-      actors[0].velY := 0
+      actors[0].state := StShoot1; FireMissile(0);
+      actors[0].velX := 0; actors[0].velY := 0
     ELSIF actors[0].weapon >= 4 THEN
-      (* Already shooting — hold state *)
-      actors[0].velX := 0;
-      actors[0].velY := 0
+      actors[0].velX := 0; actors[0].velY := 0
     ELSE
-      (* Melee weapons *)
-      actors[0].state := StFighting;
-      actors[0].velX := 0;
-      actors[0].velY := 0
+      actors[0].state := StFighting; actors[0].velX := 0; actors[0].velY := 0
     END
   ELSIF (actors[0].state = StFighting) OR (actors[0].state = StShoot1) THEN
-    actors[0].state := StStill;
-    actors[0].velX := 0;
-    actors[0].velY := 0
+    actors[0].state := StStill; actors[0].velX := 0; actors[0].velY := 0
   ELSIF input.dirKey # DirNone THEN
     actors[0].facing := input.dirKey;
-    IF MoveActor(0, input.dirKey, 1) THEN
-      actors[0].state := StWalking
-    ELSE
-      actors[0].state := StStill
-    END
+    IF MoveActor(0, input.dirKey, 1) THEN actors[0].state := StWalking
+    ELSE actors[0].state := StStill END
   ELSE
-    actors[0].state := StStill;
-    actors[0].velX := 0;
-    actors[0].velY := 0
+    actors[0].state := StStill; actors[0].velX := 0; actors[0].velY := 0
   END
 END UpdatePlayer;
 
 PROCEDURE CheckDoors;
 VAR newX, newY, newReg: INTEGER;
+    onDoor: BOOLEAN;
 BEGIN
-  IF doorCooldown > 0 THEN
-    DEC(doorCooldown);
-    RETURN
-  END;
-  (* Only check outdoor doors when near a door tile (terrain 15).
-     Check hero position and adjacent points to catch nearby doors. *)
+  IF doorCooldown > 0 THEN DEC(doorCooldown); RETURN END;
+  onDoor := FALSE;
   IF currentRegion < 8 THEN
-    IF (GetTerrainAt(actors[0].absX, actors[0].absY) # 15) AND
-       (GetTerrainAt(actors[0].absX + 4, actors[0].absY) # 15) AND
-       (GetTerrainAt(actors[0].absX - 4, actors[0].absY) # 15) AND
-       (GetTerrainAt(actors[0].absX, actors[0].absY + 4) # 15) AND
-       (GetTerrainAt(actors[0].absX, actors[0].absY - 4) # 15) THEN
-      RETURN
+    IF (GetTerrainAt(actors[0].absX, actors[0].absY) = 15) OR
+       (GetTerrainAt(actors[0].absX + 4, actors[0].absY) = 15) OR
+       (GetTerrainAt(actors[0].absX - 4, actors[0].absY) = 15) OR
+       (GetTerrainAt(actors[0].absX, actors[0].absY + 4) = 15) OR
+       (GetTerrainAt(actors[0].absX, actors[0].absY - 4) = 15) THEN
+      onDoor := TRUE
     END
-  END;
+  ELSE onDoor := TRUE END;
+  CheckCloseDoors(actors[0].absX, actors[0].absY);
   IF CheckDoor(actors[0].absX, actors[0].absY, currentRegion,
                newX, newY, newReg) THEN
-    actors[0].absX := newX;
-    actors[0].absY := newY;
-    IF newReg >= 0 THEN
-      SwitchRegion(newReg)
-    ELSE
-      (* Exiting indoor — force detect outdoor region *)
-      SwitchRegion(DetectRegion(newX, newY))
-    END;
-    doorCooldown := 60  (* ~1 second cooldown *)
+    actors[0].absX := newX; actors[0].absY := newY;
+    IF newReg >= 0 THEN RestoreDoorTiles; SwitchRegion(newReg)
+    ELSE RestoreDoorTiles; SwitchRegion(DetectRegion(newX, newY)) END;
+    doorCooldown := 60
   END
 END CheckDoors;
 
 PROCEDURE UpdateGame;
 BEGIN
-  input.quit := FALSE;
-  input.dirKey := DirNone;
-  input.attack := FALSE;
-  input.usePotion := FALSE;
-  input.useFood := FALSE;
-  input.talk := FALSE;
-  input.toggleMap := FALSE;
-
+  input.quit := FALSE; input.dirKey := DirNone;
+  input.attack := FALSE; input.usePotion := FALSE;
+  input.useFood := FALSE; input.talk := FALSE; input.toggleMap := FALSE;
   PollInput(input);
-
-  (* Inventory display: any key/click dismisses *)
   IF viewStatus = 4 THEN
     IF input.quit THEN running := FALSE; RETURN END;
     IF input.attack OR (input.menuKey # 0C) OR
-       input.mouseClick OR (input.dirKey # DirNone) THEN
-      viewStatus := 0
-    END;
+       input.mouseClick OR (input.dirKey # DirNone) THEN viewStatus := 0 END;
     RETURN
   END;
-
   mapToggled := input.toggleMap;
-  IF input.menuKey # 0C THEN
-    HandleMenuKey(input.menuKey)
-  END;
-  IF input.mouseClick THEN
-    HandleMenuClick(input.mouseX, input.mouseY)
-  END;
+  IF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
+  IF input.mouseClick THEN HandleMenuClick(input.mouseX, input.mouseY) END;
   IF input.quit THEN running := FALSE; RETURN END;
-
-  (* Pause: original checks menus[GAME].enabled[5] & 1, skips all updates *)
   IF BAND(CARDINAL(menus[MGame].enabled[5]), 1) # 0 THEN
-    IF msgTimer > 0 THEN DEC(msgTimer) END;
-    RETURN
+    IF msgTimer > 0 THEN DEC(msgTimer) END; RETURN
   END;
-
   UpdatePlayer;
   CheckEnvironment;
   UpdateEnemies;
   UpdateCombat;
   UpdateEncounters(actors[0].absX, actors[0].absY, currentRegion);
   UpdateMissiles;
-  (* Check for door entry/exit *)
   CheckDoors;
-
   UpdateCamera(actors[0].absX, actors[0].absY);
-  (* Region switch with fade *)
   prevRegion := currentRegion;
-  (* Original uses camera position (map_x/map_y) for region detection *)
   CheckRegionSwitch(camX, camY);
-
-  (* Place narration — sector-triggered arrival messages *)
   UpdatePlace(actors[0].absX, actors[0].absY, currentRegion);
   MaterializeNPCs(actors[0].absX, actors[0].absY, currentRegion);
-
   UpdateDayNight;
+  UpdateSleep;
+  CheckBedTile;
+  UpdateFatigue;
 
-  (* Battle flag: set per-frame when living enemies nearby.
-     battle2 holds previous tick's value — music persists one cycle.
-     Original: battleflag set in AI loop, battle2 = previous frame,
-     music only switches when both are FALSE. *)
+  IF dayNight DIV 2000 # dayPeriod THEN
+    dayPeriod := dayNight DIV 2000;
+    CASE dayPeriod OF
+      0: Event(28) | 4: Event(29) | 6: Event(30) | 9: Event(31) ELSE END
+  END;
+
   battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
+  IF (NOT battleFlag) AND prevBattle THEN BattleAftermath; prevBattle := FALSE END;
   IF MusicTickDue() THEN
-    IF battleFlag OR prevBattle THEN
-      SetMood(MoodBattle)
-    ELSIF currentRegion >= 8 THEN
-      SetMood(MoodIndoor)
-    ELSIF lightlevel > 120 THEN
-      SetMood(MoodDay)
-    ELSE
-      SetMood(MoodNight)
-    END;
+    IF battleFlag OR prevBattle THEN SetMood(MoodBattle)
+    ELSIF currentRegion >= 8 THEN SetMood(MoodIndoor)
+    ELSIF lightlevel > 120 THEN SetMood(MoodDay)
+    ELSE SetMood(MoodNight) END;
     prevBattle := battleFlag
   END;
 
-  IF currentRegion >= 8 THEN
-    (* Interiors are always fully lit *)
-    brightness := 100;
-    isNight := FALSE
-  END;
+  IF currentRegion >= 8 THEN brightness := 100; isNight := FALSE END;
   SaveBrotherState;
-
-  (* Update HUD stats from brother data *)
   SetStats(brothers[activeBrother].brave,
            brothers[activeBrother].luck,
            brothers[activeBrother].kind,
-           InventoryCount(ItemGold),
+           brothers[activeBrother].wealth,
            actors[0].vitality);
-
   IF msgTimer > 0 THEN DEC(msgTimer) END;
-
-  INC(cycle);
-  INC(dayNight)
+  INC(cycle); INC(dayNight)
 END UpdateGame;
 
 END GameState.

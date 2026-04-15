@@ -4,7 +4,7 @@ FROM Strings IMPORT Assign;
 FROM Items IMPORT InventoryCount,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
-FROM Brothers IMPORT brothers, activeBrother;
+FROM Brothers IMPORT brothers, activeBrother, HasStuff, HasWeapon;
 
 (* Category tab labels — always shown as top 5 in each menu *)
 CONST
@@ -167,72 +167,58 @@ BEGIN
   END
 END StuffFlag;
 
-PROCEDURE SetOptions;
-VAR hasAnyKey: INTEGER;
+PROCEDURE SF(stuffIdx: INTEGER): INTEGER;
 BEGIN
-  (* USE menu: slots 0-4 are weapons, 5-6 tools, 7=Keys, 8=Sun.
-     Original: hit+1 = weapon code. Bright if owned. *)
-  IF brothers[activeBrother].weaponInv[1] > 0 THEN
-    menus[MUse].enabled[0] := 10
-  ELSE
-    menus[MUse].enabled[0] := 8
-  END;
-  IF brothers[activeBrother].weaponInv[2] > 0 THEN
-    menus[MUse].enabled[1] := 10
-  ELSE
-    menus[MUse].enabled[1] := 8
-  END;
-  IF brothers[activeBrother].weaponInv[3] > 0 THEN
-    menus[MUse].enabled[2] := 10
-  ELSE
-    menus[MUse].enabled[2] := 8
-  END;
-  IF brothers[activeBrother].weaponInv[4] > 0 THEN
-    menus[MUse].enabled[3] := 10
-  ELSE
-    menus[MUse].enabled[3] := 8
-  END;
-  IF brothers[activeBrother].weaponInv[5] > 0 THEN
-    menus[MUse].enabled[4] := 10
-  ELSE
-    menus[MUse].enabled[4] := 8
-  END;
-  menus[MUse].enabled[5] := 8;   (* Lasso — not yet *)
-  menus[MUse].enabled[6] := 8;   (* Shell — not yet *)
-  (* Keys: enabled if player has any key *)
-  hasAnyKey := 8;
-  IF InventoryCount(ItemKey) > 0 THEN hasAnyKey := 10 END;
-  menus[MUse].enabled[7] := hasAnyKey;
-  menus[MUse].enabled[8] := 8;   (* Sun Stone — not yet *)
+  IF HasStuff(stuffIdx) THEN RETURN 10 ELSE RETURN 8 END
+END SF;
 
-  (* MAGIC menu: slots 5-11 are magic items
-     Map gems and scrolls into magic slots *)
-  menus[MMagic].enabled[5]  := StuffFlag(ItemGem);     (* Stone *)
-  menus[MMagic].enabled[6]  := 8;                       (* Jewel *)
-  menus[MMagic].enabled[7]  := StuffFlag(ItemPotion);   (* Vial *)
-  menus[MMagic].enabled[8]  := 8;                       (* Orb *)
-  menus[MMagic].enabled[9]  := 8;                       (* Totem *)
-  menus[MMagic].enabled[10] := 8;                       (* Ring *)
-  menus[MMagic].enabled[11] := StuffFlag(ItemScroll);   (* Skull *)
+PROCEDURE WF(weapIdx: INTEGER): INTEGER;
+BEGIN
+  IF HasWeapon(weapIdx) THEN RETURN 10 ELSE RETURN 8 END
+END WF;
 
-  (* KEYS menu: slots 5-10 are individual keys
-     We only have one key type, show in first slot *)
-  menus[MKeys].enabled[5]  := StuffFlag(ItemKey);  (* Gold key *)
-  menus[MKeys].enabled[6]  := 8;   (* Green *)
-  menus[MKeys].enabled[7]  := 8;   (* Blue *)
-  menus[MKeys].enabled[8]  := 8;   (* Red *)
-  menus[MKeys].enabled[9]  := 8;   (* Grey *)
-  menus[MKeys].enabled[10] := 8;   (* White *)
+PROCEDURE SetOptions;
+VAR i, j: INTEGER;
+BEGIN
+  (* USE menu: slots 0-6 = stuff[0-6], slot 7 = any key, slot 8 = sun stone.
+     Original: menus[USE].enabled[i] = stuff_flag(i) for i=0..6 *)
+  menus[MUse].enabled[0] := WF(1);   (* Dirk *)
+  menus[MUse].enabled[1] := WF(2);   (* Mace *)
+  menus[MUse].enabled[2] := WF(3);   (* Sword *)
+  menus[MUse].enabled[3] := WF(4);   (* Bow *)
+  menus[MUse].enabled[4] := WF(5);   (* Wand *)
+  menus[MUse].enabled[5] := SF(5);   (* Lasso *)
+  menus[MUse].enabled[6] := SF(6);   (* Shell *)
+  (* Slot 7 = Keys: 10 if ANY key exists *)
+  j := 8;
+  FOR i := 16 TO 21 DO
+    IF brothers[activeBrother].stuff[i] > 0 THEN j := 10 END
+  END;
+  menus[MUse].enabled[7] := j;
+  menus[MUse].enabled[8] := SF(7);   (* Sun Stone *)
 
-  (* GIVE menu: slot 5=gold, 6=book, 7=writ, 8=bone *)
-  IF InventoryCount(ItemGold) > 2 THEN
+  (* MAGIC menu: slots 5-11 = stuff[9-15].
+     Original: menus[MAGIC].enabled[i+5] = stuff_flag(i+9) *)
+  FOR i := 0 TO 6 DO
+    menus[MMagic].enabled[i + 5] := SF(i + 9)
+  END;
+
+  (* KEYS menu: slots 5-10 = stuff[16-21].
+     Original: menus[KEYS].enabled[i+5] = stuff_flag(i+16) *)
+  FOR i := 0 TO 5 DO
+    menus[MKeys].enabled[i + 5] := SF(i + 16)
+  END;
+
+  (* GIVE menu: gold, book, writ, bone.
+     Original: wealth>2 for gold, stuff_flag for others *)
+  IF brothers[activeBrother].wealth > 2 THEN
     menus[MGive].enabled[5] := 10
   ELSE
     menus[MGive].enabled[5] := 8
   END;
-  menus[MGive].enabled[6] := 8;   (* Book *)
-  menus[MGive].enabled[7] := 8;   (* Writ *)
-  menus[MGive].enabled[8] := 8;   (* Bone *)
+  menus[MGive].enabled[6] := SF(26);  (* Book *)
+  menus[MGive].enabled[7] := SF(28);  (* Writ *)
+  menus[MGive].enabled[8] := SF(29);  (* Bone *)
 
   (* Rebuild visible options for current menu *)
   BuildOptions

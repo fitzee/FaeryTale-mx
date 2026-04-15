@@ -29,6 +29,10 @@ PROCEDURE LookAtNPC(heroX, heroY: INTEGER; VAR desc: ARRAY OF CHAR): BOOLEAN;
 (* Talk to nearest NPC. Returns TRUE if someone responded. *)
 PROCEDURE TalkToNPC(heroX, heroY: INTEGER; VAR speech: ARRAY OF CHAR): BOOLEAN;
 
+(* Give item to nearest NPC. Returns TRUE if accepted. *)
+PROCEDURE GiveToNPC(heroX, heroY, itemIdx: INTEGER;
+                    VAR response: ARRAY OF CHAR): BOOLEAN;
+
 (* Get NPC name by race for display *)
 PROCEDURE NpcName(race: INTEGER; VAR name: ARRAY OF CHAR);
 

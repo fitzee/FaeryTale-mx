@@ -53,6 +53,7 @@ VAR
   objCount: INTEGER;
   objTex: ADDRESS;  (* object sprite sheet texture *)
 
+PROCEDURE AddObj(x, y, id, stat, reg: INTEGER);
 PROCEDURE InitWorldObjects;
 PROCEDURE LoadObjectSprites;
 PROCEDURE DrawWorldObjects;

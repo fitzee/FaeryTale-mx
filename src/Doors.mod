@@ -1,6 +1,9 @@
 IMPLEMENTATION MODULE Doors;
 
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
+FROM Assets IMPORT GetSectorByte, SetSectorByte, GetTerrainAt, regions,
+                   currentRegion;
+FROM Brothers IMPORT brothers, activeBrother;
 
 CONST
   CAVE  = 18;
@@ -203,4 +206,177 @@ BEGIN
   RETURN FALSE
 END CheckDoor;
 
+(* --- Door tile opening ---
+   When player steps on a door tile (terrain 15), change the map sector
+   byte from the closed door tile to an open variant.
+   Data from original open_list[17]. *)
+
+CONST
+  OpenCount = 17;
+
+TYPE
+  OpenEntry = RECORD
+    doorId:  INTEGER;  (* closed sector byte *)
+    mapId:   INTEGER;  (* image bank to match *)
+    new1:    INTEGER;  (* open tile primary *)
+    new2:    INTEGER;  (* open tile secondary *)
+    above:   INTEGER;  (* direction: 0=none, 1=above, 2=side, 3=back, 4=cabinet *)
+    keyType: INTEGER   (* 0=none, required key type *)
+  END;
+
+VAR
+  openList: ARRAY [0..16] OF OpenEntry;
+
+PROCEDURE InitOpenList;
+  PROCEDURE O(i, did, mid, n1, n2, ab, kt: INTEGER);
+  BEGIN
+    openList[i].doorId := did;
+    openList[i].mapId := mid;
+    openList[i].new1 := n1;
+    openList[i].new2 := n2;
+    openList[i].above := ab;
+    openList[i].keyType := kt
+  END O;
+BEGIN
+  (* Key types: 0=none, 1=Gold, 2=Green, 3=Blue, 4=Red, 5=Grey, 6=White *)
+  O( 0,  64, 360, 123, 124, 2, 2);  (* HSTONE — Green key *)
+  O( 1, 120, 360, 125, 126, 2, 0);  (* HWOOD — no key *)
+  O( 2, 122, 360, 127,   0, 0, 0);  (* VWOOD — no key *)
+  O( 3,  64, 280, 124, 125, 2, 5);  (* HSTONE2 — Grey key *)
+  O( 4,  77, 280, 126,   0, 0, 5);  (* VSTONE2 — Grey key *)
+  O( 5,  82, 480,  84,  85, 2, 3);  (* CRYST — Blue key *)
+  O( 6,  64, 480, 105, 106, 2, 2);  (* OASIS — Green key *)
+  O( 7, 128, 240, 154, 155, 1, 6);  (* MARBLE — White key *)
+  O( 8,  39, 680,  41,  42, 2, 1);  (* HGATE — Gold key *)
+  O( 9,  25, 680,  27,  26, 3, 1);  (* VGATE — Gold key *)
+  O(10, 114, 760, 116, 117, 1, 4);  (* SECRET — Red key *)
+  O(11, 118, 760, 116, 117, 1, 5);  (* TUNNEL — Grey key *)
+  O(12, 136, 800, 133, 134, 135, 1);  (* GOLDEN — Gold key *)
+  O(13, 187, 800,  76,  77, 2, 0);  (* HSTON3 — no key *)
+  O(14,  73, 720,  75,   0, 0, 0);  (* VSTON3 — no key *)
+  O(15, 165, 800,  85,  86, 4, 2);  (* CABINET — Green key *)
+  O(16, 210, 840, 208, 209, 2, 0)   (* BLUE — no key *)
+END InitOpenList;
+
+TYPE
+  SavedTile = RECORD
+    px, py: INTEGER;
+    oldVal: INTEGER
+  END;
+
+VAR
+  savedTiles: ARRAY [0..7] OF SavedTile;
+  savedCount: INTEGER;
+
+PROCEDURE SaveAndSet(px, py, newVal: INTEGER);
+BEGIN
+  IF savedCount < 8 THEN
+    savedTiles[savedCount].px := px;
+    savedTiles[savedCount].py := py;
+    savedTiles[savedCount].oldVal := GetSectorByte(px, py);
+    INC(savedCount)
+  END;
+  SetSectorByte(px, py, newVal)
+END SaveAndSet;
+
+PROCEDURE RestoreDoorTiles;
+VAR i: INTEGER;
+BEGIN
+  FOR i := 0 TO savedCount - 1 DO
+    SetSectorByte(savedTiles[i].px, savedTiles[i].py, savedTiles[i].oldVal)
+  END;
+  savedCount := 0
+END RestoreDoorTiles;
+
+PROCEDURE OpenDoorTile(heroX, heroY: INTEGER): BOOLEAN;
+VAR x, y, secId, regId, j, k: INTEGER;
+    l: INTEGER;
+BEGIN
+  (* Find the door tile — scan nearby positions like the original *)
+  x := heroX;
+  y := heroY;
+  IF GetTerrainAt(x, y) # 15 THEN
+    x := heroX + 4;
+    IF GetTerrainAt(x, y) # 15 THEN
+      x := heroX - 4;
+      IF GetTerrainAt(x, y) # 15 THEN
+        RETURN FALSE
+      END
+    END
+  END;
+
+  (* Align to door start — walk left and down while still on door tiles.
+     Original doorfind: finds the leftmost/bottommost tile of the door. *)
+  IF GetTerrainAt(x - 16, y) = 15 THEN DEC(x, 16) END;
+  IF GetTerrainAt(x - 16, y) = 15 THEN DEC(x, 16) END;
+  IF GetTerrainAt(x, y + 32) = 15 THEN INC(y, 32) END;
+
+  (* Convert to image coordinates (imx, imy) like original's x>>=4, y>>=5 *)
+  x := x DIV 16;
+  y := y DIV 32;
+
+  (* Read sector tile byte at door position — same as original mapxy *)
+  secId := GetSectorByte(x * 16, y * 32);
+
+  (* Get the region image bank: top 2 bits of sector byte select bank *)
+  IF (currentRegion >= 0) AND (currentRegion <= 9) THEN
+    regId := regions[currentRegion].image[secId DIV 64]
+  ELSE
+    RETURN FALSE
+  END;
+
+  (* Search open_list for matching door *)
+  FOR j := 0 TO OpenCount - 1 DO
+    IF (openList[j].mapId = regId) AND (openList[j].doorId = secId) THEN
+      k := openList[j].keyType;
+      IF k > 0 THEN
+        IF brothers[activeBrother].stuff[15 + k] <= 0 THEN
+          RETURN FALSE
+        END;
+        DEC(brothers[activeBrother].stuff[15 + k])
+      END;
+      (* Replace sector tile bytes with open variants, saving originals *)
+      savedCount := 0;
+      SaveAndSet(x * 16, y * 32, openList[j].new1);
+      k := openList[j].new2;
+      IF k > 0 THEN
+        l := openList[j].above;
+        IF l = 1 THEN
+          SaveAndSet(x * 16, (y - 1) * 32, k)
+        ELSIF l = 3 THEN
+          SaveAndSet((x - 1) * 16, y * 32, k)
+        ELSIF l = 4 THEN
+          SaveAndSet(x * 16, (y - 1) * 32, 87);
+          SaveAndSet((x + 1) * 16, y * 32, 86);
+          SaveAndSet((x + 1) * 16, (y - 1) * 32, 88)
+        ELSE
+          SaveAndSet((x + 1) * 16, y * 32, k);
+          IF l # 2 THEN
+            SaveAndSet((x + 2) * 16, y * 32, openList[j].above)
+          END
+        END
+      END;
+      RETURN TRUE
+    END
+  END;
+  RETURN FALSE
+END OpenDoorTile;
+
+PROCEDURE CheckCloseDoors(heroX, heroY: INTEGER);
+VAR dx, dy: INTEGER;
+BEGIN
+  IF savedCount = 0 THEN RETURN END;
+  dx := heroX - savedTiles[0].px;
+  dy := heroY - savedTiles[0].py;
+  IF dx < 0 THEN dx := -dx END;
+  IF dy < 0 THEN dy := -dy END;
+  IF (dx > 64) OR (dy > 64) THEN
+    RestoreDoorTiles
+  END
+END CheckCloseDoors;
+
+BEGIN
+  savedCount := 0;
+  InitOpenList
 END Doors.
+

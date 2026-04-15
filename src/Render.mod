@@ -13,7 +13,7 @@ FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
                   TerrMountain, TerrPath, TerrWall, TerrDoor,
                   TerrSand, TerrSwamp, TerrBridge, TerrFloor;
 FROM Actor IMPORT actors, actorCount, StDead, StDying, StStill,
-                  StWalking, StFighting,
+                  StWalking, StFighting, StSleep,
                   TypeEnemy, TypeSetfig, TypeCarrier;
 FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
@@ -80,8 +80,19 @@ VAR imx, imy, sx, sy, secByte, imgIdx, tileY, tileReg: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
     tex: ADDRESS;
 BEGIN
-  (* Update palette fade every 4 ticks, matching original *)
-  IF PaletteTickDue() THEN UpdateFade END;
+  (* Update palette fade — indoor regions are always full bright,
+     outdoor regions update on palette tick.
+     Force immediate update when transitioning outdoor to avoid flash. *)
+  IF currentRegion >= 8 THEN
+    fadeR := 255; fadeG := 255; fadeB := 255
+  ELSE
+    IF (fadeR = 255) AND (fadeG = 255) AND (fadeB = 255) THEN
+      (* Just came from indoor — force immediate palette update *)
+      UpdateFade
+    ELSIF PaletteTickDue() THEN
+      UpdateFade
+    END
+  END;
 
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
@@ -366,6 +377,8 @@ BEGIN
     inum := base + ((cycle + i) DIV 2) MOD 12;
     IF inum > 86 THEN inum := 86 END;
     RETURN wpnState[inum].figure
+  ELSIF actors[i].state = StSleep THEN
+    RETURN wpnState[86].figure  (* sleeping frame *)
   ELSIF (actors[i].state = StDying) OR (actors[i].state = StDead) THEN
     inum := 80;
     frame := ((cycle + i) DIV 4) MOD 3;
@@ -772,7 +785,7 @@ BEGIN
 END GetStateIdx;
 
 PROCEDURE DrawActorBody(i, sx, sy: INTEGER);
-VAR frame, texIdx, stateIdx: INTEGER;
+VAR frame, texIdx, stateIdx, mx, my, npcBank, npcFrame: INTEGER;
 BEGIN
   IF (i = 0) AND (brotherTex[activeBrother] # NIL) THEN
     frame := GetPlayerFrame(i);
@@ -794,15 +807,23 @@ BEGIN
     END
   END;
 
-  (* NPC / SETFIG sprites *)
+  (* NPC / SETFIG sprites — with tile masking like player/enemies *)
   IF actors[i].actorType = TypeSetfig THEN
-    GetSetfigSprite(actors[i].race, texIdx, frame);
-    IF (texIdx >= 0) AND (texIdx <= 4) AND (npcTex[texIdx] # NIL) THEN
-      SetColorMod(npcTex[texIdx], fadeR, fadeG, fadeB);
-      DrawTexRegion(npcTex[texIdx],
-                    0, frame * SprH, SprW, SprH,
-                    sx - S(8), sy - S(16),
-                    S(SprW), S(SprH));
+    GetSetfigSprite(actors[i].race, npcBank, npcFrame);
+    IF (npcBank >= 0) AND (npcBank <= 4) AND (npcTex[npcBank] # NIL) THEN
+      SetColorMod(npcTex[npcBank], fadeR, fadeG, fadeB);
+      BuildSpriteMaskFor(i);
+      FOR my := 0 TO SprH - 1 DO
+        FOR mx := 0 TO SprW - 1 DO
+          IF bmask[mx][my] THEN
+            DrawTexRegion(npcTex[npcBank],
+                          mx, npcFrame * SprH + my, 1, 1,
+                          sx - S(8) + mx * Scale,
+                          sy - S(16) + my * Scale,
+                          Scale, Scale)
+          END
+        END
+      END;
       RETURN
     END
   END;
@@ -819,11 +840,27 @@ BEGIN
 END DrawActorBody;
 
 PROCEDURE DrawActors;
-VAR i, sx, sy: INTEGER;
+VAR i, j, sx, sy, n, tmp: INTEGER;
+    order: ARRAY [0..19] OF INTEGER;  (* actor indices sorted by Y *)
 BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
+  (* Build sorted draw order by absY — actors further back draw first.
+     Simple insertion sort on small array. *)
+  n := 0;
   FOR i := 0 TO actorCount - 1 DO
+    order[n] := i;
+    j := n;
+    WHILE (j > 0) AND (actors[order[j-1]].absY > actors[i].absY) DO
+      order[j] := order[j-1];
+      DEC(j)
+    END;
+    order[j] := i;
+    INC(n)
+  END;
+
+  FOR j := 0 TO n - 1 DO
+    i := order[j];
     sx := (actors[i].absX - camX) * Scale;
     sy := (actors[i].absY - camY) * Scale;
     IF (sx > -S(20)) AND (sx < S(PlayW) + 20) AND

@@ -9,8 +9,8 @@ VAR
 
 PROCEDURE InitDayNight;
 BEGIN
-  (* Start at midday: daynight=6000 gives lightlevel=150, full bright *)
-  daynight := 6000;
+  (* Start at midday: daynight=12000 gives lightlevel=300, peak brightness *)
+  daynight := 12000;
   tickAccum := 0;
   UpdateLightLevel
 END InitDayNight;

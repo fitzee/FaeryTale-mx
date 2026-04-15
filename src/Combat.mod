@@ -7,7 +7,8 @@ FROM Actor IMPORT actors, actorCount,
                   TypeEnemy, TypeSetfig,
                   StFighting, StDying, StDead, StStill, StShoot1,
                   GoalDeath;
-FROM Brothers IMPORT brothers, activeBrother;
+FROM Brothers IMPORT brothers, activeBrother, StSunStone, HasStuff,
+                    IncBrave, DecLuck, DecKind;
 FROM SFX IMPORT PlayEffect, SfxEnemyHit, SfxPlayerHit;
 
 VAR
@@ -29,6 +30,23 @@ VAR damage, wt: INTEGER;
 BEGIN
   (* TEMPORARY: player invulnerability — remove this to enable enemy damage *)
   IF defender = 0 THEN RETURN END;
+
+  (* Necromancer (enemy race 9): immune to melee weapons.
+     Original: weapon < 4 && race == 9 → blocked *)
+  IF (actors[defender].actorType = TypeEnemy) AND
+     (actors[defender].race = 9) AND
+     (actors[attacker].weapon < 4) THEN
+    RETURN  (* must use bow or wand *)
+  END;
+
+  (* Witch (setfig race 9): immune to melee without Sun Stone.
+     Original: weapon < 4 && race == 0x89 && stuff[7] == 0 → blocked *)
+  IF (actors[defender].actorType = TypeSetfig) AND
+     (actors[defender].race = 9) AND
+     (actors[attacker].weapon < 4) AND
+     (NOT HasStuff(StSunStone)) THEN
+    RETURN  (* need Sun Stone to damage witch with melee *)
+  END;
 
   (* Damage: weapon value + small random bonus *)
   wt := actors[attacker].weapon;
@@ -53,21 +71,13 @@ BEGIN
 
     IF defender > 0 THEN
       (* Enemy killed: brave++ *)
-      INC(brothers[activeBrother].brave)
+      IncBrave
     ELSE
-      (* Player killed: luck -= 5 *)
-      DEC(brothers[activeBrother].luck, 5);
-      IF brothers[activeBrother].luck < 0 THEN
-        brothers[activeBrother].luck := 0
-      END
+      DecLuck(5)
     END;
 
-    (* Killing a person (SETFIG): kind -= 3 *)
     IF actors[defender].actorType = TypeSetfig THEN
-      DEC(brothers[activeBrother].kind, 3);
-      IF brothers[activeBrother].kind < 0 THEN
-        brothers[activeBrother].kind := 0
-      END
+      DecKind(3)
     END
   END
 END DoHit;

@@ -10,6 +10,16 @@ CONST
   Kevin  = 2;
   NumBrothers = 3;
 
+  (* stuff[] indices for progression items *)
+  StLasso    = 5;   (* Golden Lasso *)
+  StShell    = 6;   (* Sea Shell *)
+  StSunStone = 7;   (* Sun Stone *)
+  StTalisman = 22;  (* Talisman — win condition *)
+  StStatue   = 25;  (* Gold Statue count — need 5 *)
+  StWrit     = 28;  (* Writ from king *)
+  StBone     = 29;  (* King's Bone *)
+  StShard    = 30;  (* Shard — traversal gate *)
+
 TYPE
   BrotherData = RECORD
     name:     ARRAY [0..15] OF CHAR;
@@ -18,7 +28,9 @@ TYPE
     brave:    INTEGER;
     luck:     INTEGER;
     kind:     INTEGER;
+    wealth:   INTEGER;
     weaponInv: ARRAY [0..5] OF INTEGER;  (* count per weapon type *)
+    stuff:    ARRAY [0..34] OF INTEGER;  (* full inventory matching original *)
     startX:   INTEGER;
     startY:   INTEGER;
     alive:    BOOLEAN
@@ -28,6 +40,15 @@ VAR
   brothers: ARRAY [0..2] OF BrotherData;
   activeBrother: INTEGER;
 
+PROCEDURE HasStuff(idx: INTEGER): BOOLEAN;
+PROCEDURE HasWeapon(idx: INTEGER): BOOLEAN;
+PROCEDURE GiveStuff(idx: INTEGER);
+PROCEDURE SetStuff(idx, val: INTEGER);
+PROCEDURE AddWealth(amount: INTEGER);
+PROCEDURE IncBrave;
+PROCEDURE DecLuck(amount: INTEGER);
+PROCEDURE DecKind(amount: INTEGER);
+PROCEDURE IncKind;
 PROCEDURE InitBrothers;
 PROCEDURE SwitchToNext(): BOOLEAN;
 PROCEDURE ActiveName(VAR name: ARRAY OF CHAR);

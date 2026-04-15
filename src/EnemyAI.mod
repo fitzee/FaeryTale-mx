@@ -17,6 +17,7 @@ FROM Actor IMPORT actors, actorCount,
                   TacBackup, TacEvade, TacShoot, TacFrust;
 FROM Movement IMPORT MoveActor;
 FROM Missile IMPORT FireMissile;
+FROM WorldObj IMPORT AddObj;
 
 VAR
   rng: INTEGER;
@@ -147,14 +148,18 @@ BEGIN
           actors[i].absX := 0;
           actors[i].absY := 0;
           actors[i].visible := FALSE
-        ELSIF actors[i].race = 9 THEN
-          (* Necromancer: transform into woodcutter form *)
+        ELSIF (actors[i].race = 9) AND (actors[i].actorType = TypeEnemy) THEN
+          (* Necromancer: transform + drop Talisman (objId 139) *)
+          AddObj(actors[i].absX, actors[i].absY, 139, 1, -1);
           actors[i].race := 10;
           actors[i].vitality := 4;
           actors[i].weapon := 0;
           actors[i].state := StStill;
           actors[i].goal := GoalStand
-          (* TODO: drop talisman item at position *)
+        ELSIF (actors[i].race = 9) AND (actors[i].actorType = TypeSetfig) THEN
+          (* Witch: drop Golden Lasso (objId 27) *)
+          AddObj(actors[i].absX, actors[i].absY, 27, 1, -1);
+          actors[i].state := StDead
         ELSE
           (* Default: corpse remains on ground *)
           actors[i].state := StDead

@@ -12,6 +12,7 @@ FROM Platform IMPORT ren, Scale, PlayW, PlayH, DrawTexRegion;
 FROM World IMPORT camX, camY;
 FROM WorldObj IMPORT objTex;
 FROM DayNight IMPORT brightness;
+FROM Assets IMPORT GetTerrainAt, currentRegion;
 FROM SFX IMPORT PlayEffect, SfxBowFire, SfxWandFire, SfxArrowHit;
 
 CONST
@@ -91,6 +92,15 @@ BEGIN
         s := missiles[i].speed * 2;
         missiles[i].absX := NewX(missiles[i].absX, missiles[i].direction, s);
         missiles[i].absY := NewY(missiles[i].absY, missiles[i].direction, s);
+
+        (* Terrain collision — arrows stop on walls (1) and doors (15).
+           Original: if (px_to_im(x,y)==1 || px_to_im(x,y)==15) kill missile *)
+        IF currentRegion >= 0 THEN
+          j := GetTerrainAt(missiles[i].absX, missiles[i].absY);
+          IF (j = 1) OR (j = 15) THEN
+            missiles[i].mtype := 0
+          END
+        END;
 
         (* Hit radius *)
         IF missiles[i].mtype = 2 THEN

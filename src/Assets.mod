@@ -508,6 +508,39 @@ BEGIN
   END
 END GetSectorByte;
 
+PROCEDURE SetSectorByte(x, y, val: INTEGER);
+VAR imx, imy, secx, secy, secNum, offset: INTEGER;
+BEGIN
+  imx := x DIV TileW;
+  imy := y DIV TileH;
+  secx := (imx DIV 16) - xReg;
+  IF (secx < 0) OR (secx >= 64) THEN
+    IF BAND(CARDINAL(secx), 32) # 0 THEN secx := 0
+    ELSE secx := 63
+    END
+  END;
+  secy := (imy DIV 8) - yReg;
+  IF secy < 0 THEN secy := 0 END;
+  IF secy >= 32 THEN secy := 31 END;
+  offset := secy * 128 + secx + xReg;
+  IF (offset < 0) OR (offset >= MapSize) THEN RETURN END;
+  CASE activeMap OF
+    0: secNum := ORD(map160[offset]) |
+    1: secNum := ORD(map168[offset]) |
+    2: secNum := ORD(map176[offset]) |
+    3: secNum := ORD(map184[offset]) |
+    4: secNum := ORD(map192[offset])
+  ELSE RETURN
+  END;
+  offset := secNum * 128 + (imy MOD 8) * 16 + (imx MOD 16);
+  IF (offset < 0) OR (offset >= SectorSize) THEN RETURN END;
+  IF activeSect = 1 THEN
+    sect096[offset] := CHR(val)
+  ELSE
+    sect032[offset] := CHR(val)
+  END
+END SetSectorByte;
+
 PROCEDURE GetMapSector(x, y: INTEGER): INTEGER;
 VAR imx, imy, secx, secy, offset, secNum: INTEGER;
 BEGIN
@@ -537,6 +570,32 @@ BEGIN
   END;
   RETURN secNum
 END GetMapSector;
+
+PROCEDURE SetMapSector(x, y, val: INTEGER);
+VAR imx, imy, secx, secy, offset: INTEGER;
+BEGIN
+  imx := x DIV TileW;
+  imy := y DIV TileH;
+  secx := (imx DIV 16) - xReg;
+  IF (secx < 0) OR (secx >= 64) THEN
+    IF BAND(CARDINAL(secx), 32) # 0 THEN secx := 0
+    ELSE secx := 63
+    END
+  END;
+  secy := (imy DIV 8) - yReg;
+  IF secy < 0 THEN secy := 0 END;
+  IF secy >= 32 THEN secy := 31 END;
+  offset := secy * 128 + secx + xReg;
+  IF (offset < 0) OR (offset >= MapSize) THEN RETURN END;
+  CASE activeMap OF
+    0: map160[offset] := CHR(val) |
+    1: map168[offset] := CHR(val) |
+    2: map176[offset] := CHR(val) |
+    3: map184[offset] := CHR(val) |
+    4: map192[offset] := CHR(val)
+  ELSE
+  END
+END SetMapSector;
 
 PROCEDURE GetTerrainAt(x, y: INTEGER): INTEGER;
 VAR secByte, cm, tilesMask, subBit: INTEGER;
