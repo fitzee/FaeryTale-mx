@@ -23,7 +23,8 @@ FROM DayNight IMPORT InitDayNight, UpdateDayNight, brightness, isNight,
 FROM Brothers IMPORT InitBrothers, SwitchToNext, ActiveName,
                      SaveBrotherState, RestoreBrotherState, brothers,
                      activeBrother, GiveStuff, SetStuff, AddWealth,
-                     HasWeapon, HasStuff, AddStuffN;
+                     HasWeapon, HasStuff, AddStuffN,
+                     DecLuck, IncBrave, DecKind;
 FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC,
                FindNearestNPC, GiveToNPC;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
@@ -32,12 +33,14 @@ FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
                  optionCount, MItems, MBuy, MGive, MGame, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
-FROM Music IMPORT SetMood, StopMusic, MoodDay, MoodNight, MoodIndoor,
-                  MoodBattle;
+FROM Music IMPORT SetMood, StopMusic, IsPlaying,
+                  MoodDay, MoodNight, MoodIndoor,
+                  MoodBattle, MoodDeath;
 FROM Platform IMPORT PlayH, Scale, ScreenW;
 FROM Doors IMPORT InitDoors, CheckDoor, OpenDoorTile, RestoreDoorTiles,
-                  CheckCloseDoors;
-FROM WorldObj IMPORT CheckObjectPickup, objects, objCount;
+                  CheckCloseDoors, UseKeyOnDoor;
+FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
+                     AddObj;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -58,6 +61,8 @@ VAR
   hunger: INTEGER;
   sleepWait: INTEGER;
   containerRng: INTEGER;
+  lightTimer: INTEGER;
+  freezeTimer: INTEGER;
   nameBuf: ARRAY [0..31] OF CHAR;
   msgBuf: ARRAY [0..79] OF CHAR;
 
@@ -127,6 +132,11 @@ BEGIN
   hunger := 0;
   sleepWait := 0;
   containerRng := 31337;
+  lightTimer := 0;
+  secretTimer := 0;
+  freezeTimer := 0;
+  fairyActive := FALSE;
+  fairyX := 0;
 
   InitWorld;
   InitAll;
@@ -140,6 +150,7 @@ BEGIN
   InitMissiles;
   InitTreasureProbs;
   InitBuyTable;
+  InitStoneList;
 
   RestoreBrotherState;
   actorCount := 1;
@@ -337,19 +348,19 @@ BEGIN
   ELSIF k = 1 THEN
     i := PickContainerItem();
     GiveStuff(i); TreasureName(i, tname);
-    Assign("a ", msgBuf); Concat(msgBuf, tname, msgBuf); Concat(msgBuf, ".", msgBuf);
+    Assign(tname, msgBuf); Concat(msgBuf, ".", msgBuf);
     ShowMessage(msgBuf)
   ELSIF k = 2 THEN
     i := PickContainerItem();
     IF i = 8 THEN
       gv := 100; AddWealth(gv);
       IntToStr(gv, numStr); Assign(numStr, msgBuf); Concat(msgBuf, " Gold Pieces", msgBuf)
-    ELSE GiveStuff(i); TreasureName(i, tname); Assign("a ", msgBuf); Concat(msgBuf, tname, msgBuf)
+    ELSE GiveStuff(i); TreasureName(i, tname); Assign(tname, msgBuf)
     END;
     j := PickContainerItem();
     WHILE j = i DO j := PickContainerItem() END;
     GiveStuff(j); TreasureName(j, tname);
-    Concat(msgBuf, " and a ", msgBuf); Concat(msgBuf, tname, msgBuf);
+    Concat(msgBuf, " and ", msgBuf); Concat(msgBuf, tname, msgBuf);
     Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
   ELSE
     ShowMessage("3 keys.");
@@ -429,6 +440,140 @@ BEGIN
   GoMenu(0)
 END HandleGive;
 
+PROCEDURE InheritBrotherItems;
+VAR prev, k: INTEGER;
+BEGIN
+  (* Find the most recently dead brother and inherit their stuff *)
+  FOR prev := 0 TO 2 DO
+    IF (prev # activeBrother) AND (NOT brothers[prev].alive) THEN
+      FOR k := 0 TO 30 DO
+        INC(brothers[activeBrother].stuff[k], brothers[prev].stuff[k]);
+        brothers[prev].stuff[k] := 0
+      END
+    END
+  END
+END InheritBrotherItems;
+
+PROCEDURE HandleKeys(optIdx: INTEGER);
+VAR keyIdx: INTEGER;
+BEGIN
+  keyIdx := optIdx - 5;  (* 0=Gold,1=Green,2=Blue,3=Red,4=Grey,5=White *)
+  IF (keyIdx < 0) OR (keyIdx > 5) THEN RETURN END;
+  IF brothers[activeBrother].stuff[16 + keyIdx] <= 0 THEN
+    ShowMessage("You don't have that key."); GoMenu(0); RETURN
+  END;
+  IF UseKeyOnDoor(actors[0].absX, actors[0].absY, keyIdx + 1) THEN
+    DEC(brothers[activeBrother].stuff[16 + keyIdx])
+  ELSE
+    TreasureName(16 + keyIdx, nameBuf);
+    Assign("% tried a ", msgBuf);
+    Concat(msgBuf, nameBuf, msgBuf);
+    Concat(msgBuf, " but it didn't fit.", msgBuf);
+    ShowMessage(msgBuf)
+  END;
+  GoMenu(0)
+END HandleKeys;
+
+(* Stonehenge teleport table — 11 stone circles *)
+VAR
+  stoneX: ARRAY [0..10] OF INTEGER;
+  stoneY: ARRAY [0..10] OF INTEGER;
+
+PROCEDURE InitStoneList;
+BEGIN
+  stoneX[0] := 54; stoneY[0] := 43;
+  stoneX[1] := 71; stoneY[1] := 77;
+  stoneX[2] := 78; stoneY[2] := 102;
+  stoneX[3] := 66; stoneY[3] := 121;
+  stoneX[4] := 12; stoneY[4] := 85;
+  stoneX[5] := 79; stoneY[5] := 40;
+  stoneX[6] := 107; stoneY[6] := 38;
+  stoneX[7] := 73; stoneY[7] := 21;
+  stoneX[8] := 12; stoneY[8] := 26;
+  stoneX[9] := 26; stoneY[9] := 53;
+  stoneX[10] := 84; stoneY[10] := 60
+END InitStoneList;
+
+PROCEDURE HandleStoneTeleport;
+VAR sx, sy, i, dest, newX, newY: INTEGER;
+BEGIN
+  (* Must be on a stone circle — sector 144 *)
+  sx := actors[0].absX DIV 256;
+  sy := actors[0].absY DIV 256;
+  FOR i := 0 TO 10 DO
+    IF (stoneX[i] = sx) AND (stoneY[i] = sy) THEN
+      (* Found current stone — teleport to next based on facing *)
+      dest := (i + actors[0].facing + 1) MOD 11;
+      newX := stoneX[dest] * 256 + BAND(CARDINAL(actors[0].absX), 255);
+      newY := stoneY[dest] * 256 + BAND(CARDINAL(actors[0].absY), 255);
+      actors[0].absX := newX;
+      actors[0].absY := newY;
+      DEC(brothers[activeBrother].stuff[9]);  (* consume blue stone *)
+      ShowMessage("The stone transports you!");
+      SetOptions;
+      RETURN
+    END
+  END;
+  ShowMessage("The ring pulses but nothing happens.")
+END HandleStoneTeleport;
+
+PROCEDURE HandleMagic(optIdx: INTEGER);
+VAR itemIdx, si, i, v: INTEGER;
+    used: BOOLEAN;
+BEGIN
+  itemIdx := optIdx - 5;  (* 0=Stone,1=Jewel,2=Vial,3=Orb,4=Totem,5=Ring,6=Skull *)
+  IF (itemIdx < 0) OR (itemIdx > 6) THEN RETURN END;
+  si := 9 + itemIdx;  (* stuff[9..15] *)
+  IF brothers[activeBrother].stuff[si] <= 0 THEN
+    Event(21); GoMenu(0); RETURN  (* "If only I had some magic!" *)
+  END;
+  used := TRUE;
+  CASE itemIdx OF
+    0: (* Blue Stone — teleport at stone rings *)
+      HandleStoneTeleport;
+      used := FALSE |  (* consumed inside if successful *)
+    1: (* Green Jewel — night vision / light *)
+      INC(lightTimer, 760);
+      ShowMessage("Everything is bathed in green light!") |
+    2: (* Glass Vial — restore vitality 4-11 pts *)
+      v := (cycle MOD 8) + 4;  (* 4-11, matching rand8()+4 *)
+      INC(actors[0].vitality, v);
+      IF actors[0].vitality > (15 + brothers[activeBrother].brave DIV 4) THEN
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4
+      ELSE
+        ShowMessage("That feels a lot better!")
+      END |
+    3: (* Crystal Orb — reveal hidden objects *)
+      INC(secretTimer, 360);
+      ShowMessage("Hidden things shimmer into view!") |
+    4: (* Bird Totem — overhead map view *)
+      viewStatus := 4;
+      ShowMessage("A bird's eye view!") |
+    5: (* Gold Ring — freeze enemies ~5 sec *)
+      INC(freezeTimer, 250);
+      ShowMessage("Time stands still!") |
+    6: (* Jade Skull — kill all enemies with race < 7 *)
+      FOR i := 1 TO actorCount - 1 DO
+        IF (actors[i].vitality > 0) AND
+           (actors[i].actorType = TypeEnemy) AND
+           (actors[i].race < 7) THEN
+          actors[i].vitality := 0;
+          actors[i].state := StDying;
+          DEC(brothers[activeBrother].brave)
+        END
+      END;
+      IF battleFlag THEN Event(34) END;
+      ShowMessage("Dark energy destroys the enemies!")
+  ELSE
+    GoMenu(0); RETURN
+  END;
+  IF used THEN
+    DEC(brothers[activeBrother].stuff[si])
+  END;
+  SetOptions;
+  GoMenu(0)
+END HandleMagic;
+
 PROCEDURE HandleMenuClick(mx, my: INTEGER);
 CONST HudW = 640;
 VAR hx, hy, col, row, itemIdx, optIdx: INTEGER;
@@ -452,6 +597,7 @@ BEGIN
         5: ShowInventory | 6: HandleWorldPickup | 7: HandleLook |
         8: GoMenu(8) | 9: GoMenu(7)
       ELSE END |
+    1: HandleMagic(optIdx) |
     2: CASE optIdx OF
         5: HandleYell | 6: HandleTalk | 7: HandleTalk
       ELSE END |
@@ -460,6 +606,7 @@ BEGIN
         5: TogglePause | 6: ToggleMusic | 7: |
         8: running := FALSE | 9: ShowMessage("Load not implemented")
       ELSE END |
+    6: HandleKeys(optIdx) |
     7: HandleGive(optIdx) |
     8: IF (optIdx >= 5) AND (optIdx <= 9) THEN
         IF HasWeapon(optIdx - 4) THEN
@@ -485,7 +632,7 @@ BEGIN
       16: ShowMessage("Opened some sacks."); ContainerLoot |
       17: ShowMessage("Found a gold ring!"); GiveStuff(14) |
       18: ShowMessage("Found a blue stone!"); GiveStuff(9) |
-      19: ShowMessage("Found a gold jewel!"); GiveStuff(10) |
+      19: ShowMessage("Found a green jewel!"); GiveStuff(10) |
       20: Event(17);
           IF currentRegion > 7 THEN Event(19)
           ELSE Event(18) END |
@@ -513,7 +660,9 @@ BEGIN
           ShowMessage("The quest is complete!") |
      140: ShowMessage("% found a Shard!"); SetStuff(30, 1) |
      155: ShowMessage("% found the Sun Stone!"); SetStuff(7, 1) |
-     149: ShowMessage("Found a gold statue!"); GiveStuff(25)
+     149: ShowMessage("Found a gold statue!"); GiveStuff(25) |
+      28: ShowMessage("% found his brother's bones.");
+          InheritBrotherItems
     ELSE ShowMessage("Found something!") END;
     SetOptions
   ELSE SearchNearbyCorpses END
@@ -545,6 +694,17 @@ BEGIN
       IF actors[0].vitality <= 0 THEN
         actors[0].state := StDying; ShowMessage("The swamp claims you...")
       ELSIF (cycle MOD 90) = 0 THEN ShowMessage("The swamp drains your strength...") END
+    END
+  END;
+  (* Drowning: environ = 30 means fully submerged *)
+  IF (actors[0].environ = 30) AND (BAND(CARDINAL(cycle), 7) = 0) THEN
+    DEC(actors[0].vitality);
+    IF actors[0].vitality <= 0 THEN
+      actors[0].vitality := 0;
+      actors[0].state := StDying;
+      actors[0].tactic := 7;
+      DecLuck(5);
+      ShowMessage("% is drowning!")
     END
   END
 END CheckEnvironment;
@@ -641,31 +801,85 @@ PROCEDURE UpdatePlayer;
 BEGIN
   IF input.quit THEN running := FALSE; RETURN END;
   IF actors[0].state = StSleep THEN RETURN END;
-  IF actors[0].state = StDead THEN
-    IF deathTimer = 0 THEN
-      ActiveName(nameBuf); Assign(nameBuf, msgBuf);
-      Concat(msgBuf, " has fallen!", msgBuf); ShowMessage(msgBuf); deathTimer := 120
-    ELSIF deathTimer = 1 THEN
-      IF SwitchToNext() THEN
-        ActiveName(nameBuf); Assign(nameBuf, msgBuf);
-        Concat(msgBuf, " takes up the quest!", msgBuf); ShowMessage(msgBuf); deathTimer := 0
-      ELSE ShowMessage("All brothers have fallen... Game Over."); deathTimer := -1 END
+  (* Player DYING → DEAD transition: tactic counts down from 7 *)
+  IF actors[0].state = StDying THEN
+    IF actors[0].tactic = 7 THEN
+      SetMood(MoodDeath)  (* death music starts immediately, replaces battle *)
     END;
-    IF deathTimer > 0 THEN DEC(deathTimer) END;
+    DEC(actors[0].tactic);
+    IF actors[0].tactic <= 0 THEN
+      actors[0].state := StDead;
+      deathTimer := 0;  (* counts UP, maps to goodfairy 255→1 *)
+      ActiveName(nameBuf); Assign(nameBuf, msgBuf);
+      Concat(msgBuf, " has fallen!", msgBuf); ShowMessage(msgBuf);
+      DecLuck(5)
+    END;
+    RETURN
+  END;
+  IF actors[0].state = StDead THEN
+    INC(deathTimer);
+    (* Map to original goodfairy countdown: gf = 255 - deathTimer *)
+    (* Fairy flies in from right, stops just right of dead hero,
+       then hovers there until brother switch.
+       Death music is ~15 seconds. At 33ms/frame that's ~450 frames. *)
+    IF (deathTimer > 150) AND (deathTimer <= 400) THEN
+      (* Flying in *)
+      fairyActive := TRUE;
+      fairyX := actors[0].absX + 16 + (400 - deathTimer)
+    ELSIF deathTimer > 400 THEN
+      (* Hovering at final position *)
+      fairyActive := TRUE;
+      fairyX := actors[0].absX + 16
+    ELSE
+      fairyActive := FALSE
+    END;
+    IF (deathTimer > 9000) OR ((deathTimer > 200) AND (NOT IsPlaying())) THEN
+      StopMusic;  (* ensure music stops on skip or natural end *)
+      (* Time to switch brothers *)
+      (* Place dead brother's bones at death location *)
+      AddObj(actors[0].absX, actors[0].absY, 28, 1, -1);
+      IF SwitchToNext() THEN
+        (* Reset new brother to Tambry *)
+        actors[0].absX := 19036; actors[0].absY := 15755;
+        actors[0].state := StStill;
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
+        actors[0].weapon := 1;  (* dirk *)
+        actors[0].environ := 0;
+        actors[0].facing := 4;
+        hunger := 0; fatigue := 0;
+        dayNight := 12000;  (* new brother starts midday *)
+        lightTimer := 0; secretTimer := 0; freezeTimer := 0;
+        fairyActive := FALSE;
+        RestoreDoorTiles;
+        SwitchRegion(3);
+        InitPlace(actors[0].absX, actors[0].absY, 3);
+        actorCount := 1;
+        Event(9);  (* "% started the journey in Tambry" *)
+        IF activeBrother = 1 THEN Event(10)   (* "as had his brother before him" *)
+        ELSIF activeBrother = 2 THEN Event(11) END;  (* "as had his brothers before him" *)
+        deathTimer := 0;
+        SetOptions
+      ELSE
+        ShowMessage("All brothers have fallen... Game Over.");
+        deathTimer := -1
+      END
+    END;
     RETURN
   END;
   IF potionCooldown > 0 THEN DEC(potionCooldown) END;
   IF input.usePotion AND (potionCooldown = 0) THEN
     IF UseItem(ItemPotion) THEN
       INC(actors[0].vitality, 30);
-      IF actors[0].vitality > 100 THEN actors[0].vitality := 100 END;
+      IF actors[0].vitality > (15 + brothers[activeBrother].brave DIV 4) THEN
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4 END;
       ShowMessage("Potion restores your health!"); potionCooldown := 30
     ELSE ShowMessage("No potions!"); potionCooldown := 30 END
   END;
   IF input.useFood AND (potionCooldown = 0) THEN
     IF UseItem(ItemFood) THEN
       INC(actors[0].vitality, 10);
-      IF actors[0].vitality > 100 THEN actors[0].vitality := 100 END;
+      IF actors[0].vitality > (15 + brothers[activeBrother].brave DIV 4) THEN
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4 END;
       IF hunger > 30 THEN DEC(hunger, 30) ELSE hunger := 0 END;
       ShowMessage("You eat some food."); potionCooldown := 30
     ELSE ShowMessage("No food!"); potionCooldown := 30 END
@@ -721,6 +935,7 @@ BEGIN
     actors[0].absX := newX; actors[0].absY := newY;
     IF newReg >= 0 THEN RestoreDoorTiles; SwitchRegion(newReg)
     ELSE RestoreDoorTiles; SwitchRegion(DetectRegion(newX, newY)) END;
+    InitPlace(actors[0].absX, actors[0].absY, currentRegion);
     doorCooldown := 60
   END
 END CheckDoors;
@@ -737,19 +952,33 @@ BEGIN
        input.mouseClick OR (input.dirKey # DirNone) THEN viewStatus := 0 END;
     RETURN
   END;
-  mapToggled := input.toggleMap;
-  IF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
-  IF input.mouseClick THEN HandleMenuClick(input.mouseX, input.mouseY) END;
+  (* Block menus during death — any key skips to brother switch *)
+  IF (actors[0].state = StDead) OR (actors[0].state = StDying) THEN
+    IF input.attack OR (input.menuKey # 0C) OR
+       (input.dirKey # DirNone) THEN
+      IF actors[0].state = StDead THEN
+        deathTimer := 9999  (* force immediate brother switch *)
+      END
+    END
+  ELSE
+    mapToggled := input.toggleMap;
+    IF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
+    IF input.mouseClick THEN HandleMenuClick(input.mouseX, input.mouseY) END
+  END;
   IF input.quit THEN running := FALSE; RETURN END;
   IF BAND(CARDINAL(menus[MGame].enabled[5]), 1) # 0 THEN
     IF msgTimer > 0 THEN DEC(msgTimer) END; RETURN
   END;
   UpdatePlayer;
   CheckEnvironment;
-  UpdateEnemies;
-  UpdateCombat;
-  UpdateEncounters(actors[0].absX, actors[0].absY, currentRegion);
-  UpdateMissiles;
+  IF freezeTimer = 0 THEN
+    UpdateEnemies;
+    IF (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
+      UpdateCombat;
+      UpdateEncounters(actors[0].absX, actors[0].absY, currentRegion)
+    END;
+    UpdateMissiles
+  END;
   CheckDoors;
   UpdateCamera(actors[0].absX, actors[0].absY);
   prevRegion := currentRegion;
@@ -767,29 +996,46 @@ BEGIN
       0: Event(28) | 4: Event(29) | 6: Event(30) | 9: Event(31) ELSE END
   END;
 
-  battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
-  IF battleFlag THEN aftermathDone := FALSE END;  (* new battle resets *)
-  IF (NOT battleFlag) AND prevBattle AND (NOT aftermathDone) THEN
-    BattleAftermath;
-    aftermathDone := TRUE
+  IF (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
+    prevBattle := battleFlag;  (* save BEFORE updating — like original battle2 *)
+    battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
+    IF battleFlag THEN aftermathDone := FALSE END;
+    (* Battle music START — immediate when battle begins *)
+    IF battleFlag AND (NOT prevBattle) THEN SetMood(MoodBattle) END;
+    (* Battle END — aftermath *)
+    IF (NOT battleFlag) AND prevBattle AND (NOT aftermathDone) THEN
+      BattleAftermath;
+      aftermathDone := TRUE
+    END
   END;
-  IF MusicTickDue() THEN
-    IF battleFlag OR prevBattle THEN SetMood(MoodBattle)
-    ELSIF currentRegion >= 8 THEN SetMood(MoodIndoor)
-    ELSIF lightlevel > 120 THEN SetMood(MoodDay)
-    ELSE SetMood(MoodNight) END;
-    prevBattle := battleFlag
+  (* Normal music resume — only every 8 frames, queued not immediate *)
+  IF MusicTickDue() AND
+     (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
+    IF NOT battleFlag THEN
+      IF currentRegion >= 8 THEN SetMood(MoodIndoor)
+      ELSIF lightlevel > 120 THEN SetMood(MoodDay)
+      ELSE SetMood(MoodNight) END
+    END
   END;
 
-  IF currentRegion >= 8 THEN brightness := 100; isNight := FALSE END;
+  IF currentRegion >= 8 THEN brightness := 100; isNight := FALSE
+  ELSIF lightTimer > 0 THEN brightness := 100; isNight := FALSE
+  END;
   SaveBrotherState;
   SetStats(brothers[activeBrother].brave,
            brothers[activeBrother].luck,
            brothers[activeBrother].kind,
            brothers[activeBrother].wealth,
            actors[0].vitality);
+  (* Magic timers *)
+  IF lightTimer > 0 THEN DEC(lightTimer) END;
+  IF secretTimer > 0 THEN DEC(secretTimer) END;
+  IF freezeTimer > 0 THEN DEC(freezeTimer) END;
+  revealHidden := (secretTimer > 0);
+
   IF msgTimer > 0 THEN DEC(msgTimer) END;
-  INC(cycle); INC(dayNight)
+  INC(cycle);
+  IF freezeTimer = 0 THEN INC(dayNight) END  (* freeze stops time *)
 END UpdateGame;
 
 END GameState.

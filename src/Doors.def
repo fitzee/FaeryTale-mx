@@ -20,4 +20,8 @@ PROCEDURE RestoreDoorTiles;
 (* Close doors if player has walked away *)
 PROCEDURE CheckCloseDoors(heroX, heroY: INTEGER);
 
+(* Try to use a key (1=Gold..6=White) on a nearby door.
+   Returns TRUE if a door was opened. *)
+PROCEDURE UseKeyOnDoor(heroX, heroY, keyType: INTEGER): BOOLEAN;
+
 END Doors.

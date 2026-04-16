@@ -30,7 +30,7 @@ VAR
   sorceressStatueGiven: BOOLEAN;
 
   (* Speech table — transcribed from original narr.c speeches[] *)
-  speeches: ARRAY [0..49] OF ARRAY [0..127] OF CHAR;
+  speeches: ARRAY [0..59] OF ARRAY [0..127] OF CHAR;
 
 (* --- Setfig table init --- *)
 
@@ -116,14 +116,24 @@ BEGIN
   Assign('"Look into my eyes and Die!!" hissed the witch.', speeches[46]);
   Assign('"Bring me bones of the ancient King."', speeches[47]);
   Assign("% gave him the ancient bones.", speeches[48]);
-  Assign("Well met, traveler.", speeches[49])
+  Assign("Well met, traveler.", speeches[49]);
+  Assign("% gave him some gold coins. Thank you, young sir!", speeches[50]);
+  Assign("Sorry, but I have nothing to sell.", speeches[51]);
+  (* 52 is empty *)
+  speeches[52][0] := 0C;
+  Assign("The dragon's cave is east of here.", speeches[53]);
+  Assign("The dragon's cave is west of here.", speeches[54]);
+  Assign("The dragon's cave is south of here.", speeches[55]);
+  Assign("Take this seashell as a token of my gratitude.", speeches[56]);
+  Assign("Just hop on my back if you need a ride.", speeches[57])
 END InitSpeeches;
 
 (* --- Materialization --- *)
 
 PROCEDURE MaterializeNPCs(heroX, heroY, region: INTEGER);
-VAR i, dx, dy, idx, race: INTEGER;
+VAR i, dx, dy, idx, race, seq: INTEGER;
 BEGIN
+  seq := 0;  (* sequential index per NPC — used as goal for speech variation *)
   FOR i := 0 TO objCount - 1 DO
     IF (objects[i].status = 3) AND
        ((objects[i].region = region) OR (objects[i].region = -1)) THEN
@@ -144,7 +154,7 @@ BEGIN
             actors[idx].actorType := TypeSetfig;
             actors[idx].race := race;
             actors[idx].state := StStill;
-            actors[idx].goal := GoalWait;
+            actors[idx].goal := seq;
             actors[idx].vitality := 999;
             actors[idx].weapon := 0;
             actors[idx].facing := 4;  (* south by default *)
@@ -157,9 +167,8 @@ BEGIN
             materialized[i] := TRUE;
           END
         END
-      ELSE
-        (* Too far — could dematerialize, but keep simple for now *)
-      END
+      END;
+      INC(seq)
     END
   END
 END MaterializeNPCs;
@@ -228,41 +237,52 @@ END LookAtNPC;
 
 (* Select speech and apply side effects based on NPC race.
    Returns speech index. Modifies inventory for one-time rewards. *)
-PROCEDURE SelectSpeech(race: INTEGER): INTEGER;
+PROCEDURE SelectSpeech(actorIdx: INTEGER): INTEGER;
+VAR race, goal, kind: INTEGER;
 BEGIN
+  race := actors[actorIdx].race;
+  goal := actors[actorIdx].goal;
+  kind := brothers[activeBrother].kind;
+
   CASE race OF
-    0:  RETURN 27 |   (* wizard — hint *)
+    0:  (* wizard — goal-based hints if kind enough *)
+      IF kind < 10 THEN RETURN 35
+      ELSE RETURN 27 + (goal MOD 7)
+      END |
     1:  (* priest — Writ gates statue reward *)
-      IF HasStuff(StWrit) AND
-         (NOT priestStatueGiven) THEN
+      IF HasStuff(StWrit) AND (NOT priestStatueGiven) THEN
         priestStatueGiven := TRUE;
         GiveStuff(StStatue);
         RETURN 39
       ELSIF priestStatueGiven THEN
-        RETURN 37  (* "Seek the power of the Stones" *)
-      ELSIF brothers[activeBrother].brave > 30 THEN
-        (* Heal if brave enough *)
-        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
-        RETURN 38  (* "I shall Heal all your wounds" *)
-      ELSE
+        RETURN 37
+      ELSIF kind < 10 THEN
         RETURN 40  (* "Repent, Sinner!" *)
+      ELSE
+        actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
+        RETURN 36 + (goal MOD 3)
       END |
-    4:  RETURN 16 |   (* princess *)
-    5:  RETURN 17 |   (* king *)
-    6:  RETURN 20 |   (* noble *)
+    2, 3: RETURN 15 |  (* guard *)
+    4:  RETURN 16 |    (* princess *)
+    5:  RETURN 17 |    (* king *)
+    6:  RETURN 20 |    (* noble *)
     7:  (* sorceress — one-time statue *)
       IF NOT sorceressStatueGiven THEN
         sorceressStatueGiven := TRUE;
         GiveStuff(StStatue);
-        RETURN 45  (* "Here is one of the golden figurines" *)
+        RETURN 45
       ELSE
-        RETURN 49  (* generic *)
+        RETURN 49
       END |
-    8:  RETURN 12 |   (* bartender *)
-    9:  RETURN 46 |   (* witch *)
-   10:  RETURN 47 |   (* spectre *)
-   12:  RETURN 22 |   (* ranger *)
-   13:  RETURN 23     (* beggar *)
+    8:  RETURN 12 |    (* bartender — "buy something?" *)
+    9:  RETURN 46 |    (* witch *)
+   10:  RETURN 47 |    (* spectre *)
+   11:  RETURN 49 |    (* ghost *)
+   12:  (* ranger — region-based *)
+      IF currentRegion = 2 THEN RETURN 22
+      ELSE RETURN 53 + (goal MOD 3)
+      END |
+   13:  RETURN 23      (* beggar *)
   ELSE
     RETURN 49
   END
@@ -273,8 +293,7 @@ VAR idx, race, speechIdx: INTEGER;
 BEGIN
   idx := FindNearestNPC(heroX, heroY);
   IF idx < 0 THEN RETURN FALSE END;
-  race := actors[idx].race;
-  speechIdx := SelectSpeech(race);
+  speechIdx := SelectSpeech(idx);
   IF (speechIdx >= 0) AND (speechIdx < MaxSpeeches) THEN
     Assign(speeches[speechIdx], speech)
   ELSE

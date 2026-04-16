@@ -3,7 +3,7 @@ DEFINITION MODULE GameState;
 (* Pure Modula-2 game state management *)
 
 CONST
-  FrameTime = 20;  (* 50Hz PAL vblank rate *)
+  FrameTime = 33;  (* ~30fps matching Amiga actual game loop rate *)
   MsgLen    = 64;
 
 VAR
@@ -17,6 +17,9 @@ VAR
   mapToggled: BOOLEAN;
   regionFade: INTEGER;  (* >0 = fading during region switch *)
   viewStatus: INTEGER;  (* 0=normal, 4=inventory display *)
+  secretTimer: INTEGER;  (* >0 reveals hidden objects *)
+  fairyActive: BOOLEAN;
+  fairyX: INTEGER;  (* fairy screen X in world coords *)
 
 PROCEDURE InitGame;
 PROCEDURE UpdateGame;

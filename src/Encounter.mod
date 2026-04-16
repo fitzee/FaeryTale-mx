@@ -8,12 +8,13 @@ FROM Actor IMPORT actors, actorCount, MaxActors,
                   TypeEnemy, StStill, StDead, StDying,
                   GoalAttack1, GoalAttack2, GoalArcher1, GoalArcher2;
 FROM Movement IMPORT ProxCheck;
+FROM Platform IMPORT GetTicks;
 FROM Assets IMPORT currentRegion, GetTerrainAt;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
   MaxTry = 10;
-  MaxEncounterActors = 7;  (* original: anix < 7 *)
+  MaxEncounterActors = 5;  (* original: anix < 7 but player=0, slots 1-4 = max 4 enemies *)
 
 TYPE
   EncounterRec = RECORD
@@ -42,6 +43,7 @@ VAR
   loadPending:   BOOLEAN;
   pendingRace:   INTEGER;
   pendingCount:  INTEGER;
+  pendingMix:    INTEGER;   (* mixflag: bit1=race mix, bit2=weapon re-rand *)
   tick:          INTEGER;   (* internal frame counter *)
 
   rngState: INTEGER;
@@ -53,9 +55,8 @@ VAR
 PROCEDURE Rand(limit: INTEGER): INTEGER;
 BEGIN
   rngState := rngState * 1103515245 + 12345;
-  IF rngState < 0 THEN rngState := -rngState END;
   IF limit <= 0 THEN RETURN 0 END;
-  RETURN (rngState DIV 65536) MOD limit
+  RETURN INTEGER(BAND(CARDINAL(rngState DIV 65536), 7FFFH)) MOD limit
 END Rand;
 
 (* --- Data initialization (unchanged) --- *)
@@ -137,7 +138,7 @@ BEGIN
   SetExtent(17,  5140,34860,  6260,37260,  8, 1,8, 0);
   SetExtent(18,   660,33510,  2060,34560,  8, 1,8, 0);
   SetExtent(19, 18687,15338, 19211,16136, 80, 0,1, 0);
-  SetExtent(20, 16953,18719, 20240,17484,  3, 1,3, 0);
+  SetExtent(20, 16953,17484, 20240,18719,  3, 1,3, 0);  (* y swapped to fix extent *)
   SetExtent(21, 20593,18719, 23113,22769,  3, 1,3, 0);
   SetExtent(22,     0,    0, 32767,40959,  3, 1,8, 0)
 END InitExtents;
@@ -202,7 +203,7 @@ END FindFreeSlot;
 (* --- Place a pending encounter --- *)
 
 PROCEDURE PlaceEncounter(heroX, heroY: INTEGER);
-VAR slot, j, k, xtest, ytest, spawned, dir, dist: INTEGER;
+VAR slot, j, k, xtest, ytest, spawned, dir, dist, race: INTEGER;
     encX, encY: INTEGER;
 BEGIN
   IF (pendingRace < 0) OR (pendingRace > 10) THEN
@@ -237,7 +238,15 @@ BEGIN
           IF j >= MaxTry THEN EXIT END
         END;
         IF j < MaxTry THEN
-          SetupEnemy(slot, pendingRace, xtest, ytest);
+          (* Race mixing: if mixflag bit 1 set and not snakes (race 4),
+             alternate between adjacent race pairs *)
+          IF (BAND(CARDINAL(pendingMix), 2) # 0) AND
+             (pendingRace # 4) THEN
+            race := BAND(CARDINAL(pendingRace), 0EH) + Rand(2)
+          ELSE
+            race := pendingRace
+          END;
+          SetupEnemy(slot, race, xtest, ytest);
           IF slot >= actorCount THEN actorCount := slot + 1 END;
           INC(spawned)
         ELSE
@@ -364,21 +373,33 @@ BEGIN
   (* Too many actors alive *)
   IF actorCount >= MaxEncounterActors THEN RETURN END;
 
-  (* Danger level roll — original: rand(256) < danger_level *)
+  (* Danger level roll — original: rand64() <= danger_level *)
   IF region > 7 THEN
     dangerLevel := 5 + et
   ELSE
     dangerLevel := 2 + et
   END;
-  IF Rand(256) >= dangerLevel THEN RETURN END;
+  (* Original: rand64() <= danger_level — low roll = spawn *)
+  IF Rand(64) > dangerLevel THEN RETURN END;
 
   (* Roll passed — queue encounter *)
-  race := Rand(4);
-  IF (et = 7) AND (race = 2) THEN race := 4 END;
-  IF et = 8 THEN race := 6 END;
-  IF et = 49 THEN race := 2 END;
+  (* mixflag: random bitmask — bit1=race mixing, bit2=weapon re-rand.
+     Original: mixflag = rand(); then cleared for certain xtypes *)
+  cnt := Rand(256);  (* use as mixflag source *)
+  IF (et >= 50) OR (BAND(CARDINAL(et), 3) = 0) THEN cnt := 0 END;
 
-  cnt := 1 + Rand(3);
+  race := Rand(4);
+  IF (et = 7) AND (race = 2) THEN race := 4; cnt := 0 END;
+  IF et = 8 THEN race := 6; cnt := 0 END;
+  IF et = 49 THEN race := 2; cnt := 0 END;
+
+  pendingMix := cnt;
+
+  (* Enemy count from extent v1 + rand(v2), matching original *)
+  cnt := extents[ei].v1;
+  IF extents[ei].v2 > 0 THEN
+    INC(cnt, Rand(extents[ei].v2))
+  END;
   IF cnt > MaxEncounterActors - actorCount THEN
     cnt := MaxEncounterActors - actorCount
   END;
@@ -391,12 +412,14 @@ END UpdateEncounters;
 
 PROCEDURE InitEncounters;
 BEGIN
-  rngState := 12345;
+  rngState := GetTicks();  (* seed from system clock for variety *)
+  IF rngState = 0 THEN rngState := 54321 END;
   curExtent := -1;
   xtype := 0;
   loadPending := FALSE;
   pendingRace := 0;
   pendingCount := 0;
+  pendingMix := 0;
   tick := 0;
   InitCharts;
   InitWeaponProbs;

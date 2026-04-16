@@ -1,7 +1,6 @@
 IMPLEMENTATION MODULE Combat;
 
-(* Combat system matching original FTA dohit/checkdead.
-   TEMPORARY: player takes no damage (defender=0 suppressed). *)
+(* Combat system matching original FTA dohit/checkdead. *)
 
 FROM Actor IMPORT actors, actorCount,
                   TypeEnemy, TypeSetfig,
@@ -10,6 +9,7 @@ FROM Actor IMPORT actors, actorCount,
 FROM Brothers IMPORT brothers, activeBrother, StSunStone, HasStuff,
                     IncBrave, DecLuck, DecKind;
 FROM SFX IMPORT PlayEffect, SfxEnemyHit, SfxPlayerHit;
+FROM Movement IMPORT MoveActor;
 
 VAR
   hitCooldown: ARRAY [0..19] OF INTEGER;  (* per-actor attack timer *)
@@ -27,10 +27,8 @@ END Rand;
 
 PROCEDURE DoHit(attacker, defender: INTEGER);
 VAR damage, wt: INTEGER;
+    kb: BOOLEAN;
 BEGIN
-  (* TEMPORARY: player invulnerability — remove this to enable enemy damage *)
-  IF defender = 0 THEN RETURN END;
-
   (* Necromancer (enemy race 9): immune to melee weapons.
      Original: weapon < 4 && race == 9 → blocked *)
   IF (actors[defender].actorType = TypeEnemy) AND
@@ -48,11 +46,11 @@ BEGIN
     RETURN  (* need Sun Stone to damage witch with melee *)
   END;
 
-  (* Damage: weapon value + small random bonus *)
+  (* Damage: weapon + bitrand(2) matching original *)
   wt := actors[attacker].weapon;
-  IF wt >= 8 THEN wt := 5 END;
-  IF wt < 1 THEN wt := 1 END;
-  damage := wt + 1;
+  IF wt >= 8 THEN wt := 5 END;  (* cap touch attacks *)
+  damage := wt + Rand(2);  (* 0 or 1 random bonus *)
+  IF damage < 1 THEN damage := 1 END;
 
   DEC(actors[defender].vitality, damage);
 
@@ -60,6 +58,15 @@ BEGIN
     PlayEffect(SfxPlayerHit)
   ELSE
     PlayEffect(SfxEnemyHit)
+  END;
+
+  (* Knockback: push defender 2px in attacker's facing direction.
+     Original: move_figure(j,fc,2) + move_figure(i,fc,2) *)
+  IF (actors[defender].actorType # TypeSetfig) THEN
+    kb := MoveActor(defender, actors[attacker].facing, 2);
+    IF kb AND (attacker >= 0) THEN
+      kb := MoveActor(attacker, actors[attacker].facing, 2)
+    END
   END;
 
   (* Check death — matches original checkdead() *)
@@ -138,17 +145,22 @@ BEGIN
     IF hitCooldown[i] > 0 THEN DEC(hitCooldown[i]) END
   END;
 
-  (* Enemy → Player attacks — only deal damage, don't change state.
-     State management is handled by EnemyAI. *)
+  (* Enemy → Player attacks — skip if player is dead/dying *)
+  IF (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
   FOR i := 1 TO actorCount - 1 DO
     IF (actors[i].state = StFighting) AND (hitCooldown[i] = 0) THEN
       Dist(i, 0, xd, yd);
-      IF (xd < 14) AND (yd < 14) THEN
+      (* Original: enemy hits if rand256() > brave AND within range *)
+      bv := brothers[activeBrother].brave;
+      IF (xd < 14) AND (yd < 14) AND (Rand(256) > bv) THEN
         DoHit(i, 0);
         hitCooldown[i] := 12
+      ELSIF (xd < 14) AND (yd < 14) THEN
+        hitCooldown[i] := 8  (* missed — brief cooldown *)
       END
     END
   END;
+  END;  (* player dead/dying check *)
 
   (* Player → Enemy melee attacks *)
   IF (actors[0].state = StFighting) AND (hitCooldown[0] = 0) THEN

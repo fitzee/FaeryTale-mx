@@ -4,6 +4,7 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Assets IMPORT GetSectorByte, SetSectorByte, GetTerrainAt, regions,
                    currentRegion;
 FROM Brothers IMPORT brothers, activeBrother;
+FROM HudLog IMPORT AddLogLine;
 
 CONST
   CAVE  = 18;
@@ -226,6 +227,7 @@ TYPE
 
 VAR
   openList: ARRAY [0..16] OF OpenEntry;
+  bumped: BOOLEAN;
 
 PROCEDURE InitOpenList;
   PROCEDURE O(i, did, mid, n1, n2, ab, kt: INTEGER);
@@ -285,7 +287,8 @@ BEGIN
   FOR i := 0 TO savedCount - 1 DO
     SetSectorByte(savedTiles[i].px, savedTiles[i].py, savedTiles[i].oldVal)
   END;
-  savedCount := 0
+  savedCount := 0;
+  bumped := FALSE
 END RestoreDoorTiles;
 
 PROCEDURE OpenDoorTile(heroX, heroY: INTEGER): BOOLEAN;
@@ -331,6 +334,10 @@ BEGIN
       k := openList[j].keyType;
       IF k > 0 THEN
         IF brothers[activeBrother].stuff[15 + k] <= 0 THEN
+          IF NOT bumped THEN
+            AddLogLine("It's locked.");
+            bumped := TRUE
+          END;
           RETURN FALSE
         END;
         DEC(brothers[activeBrother].stuff[15 + k])
@@ -375,8 +382,78 @@ BEGIN
   END
 END CheckCloseDoors;
 
+(* Try to open a nearby door with a specific key type.
+   Searches hero position + 8 directions at 16px offset.
+   Returns TRUE if a door was opened. *)
+PROCEDURE UseKeyOnDoor(heroX, heroY, keyType: INTEGER): BOOLEAN;
+CONST
+  Step = 16;
+VAR
+  dir, tx, ty, x, y, secId, regId, j, k, l: INTEGER;
+  xd: ARRAY [0..8] OF INTEGER;
+  yd: ARRAY [0..8] OF INTEGER;
+BEGIN
+  xd[0] := 0;    yd[0] := 0;
+  xd[1] := 0;    yd[1] := -Step;
+  xd[2] := Step; yd[2] := -Step;
+  xd[3] := Step; yd[3] := 0;
+  xd[4] := Step; yd[4] := Step;
+  xd[5] := 0;    yd[5] := Step;
+  xd[6] := -Step; yd[6] := Step;
+  xd[7] := -Step; yd[7] := 0;
+  xd[8] := -Step; yd[8] := -Step;
+
+  FOR dir := 0 TO 8 DO
+    tx := heroX + xd[dir];
+    ty := heroY + yd[dir];
+    IF GetTerrainAt(tx, ty) = 15 THEN
+      x := tx; y := ty;
+      (* Align to door origin *)
+      IF GetTerrainAt(x - 16, y) = 15 THEN DEC(x, 16) END;
+      IF GetTerrainAt(x - 16, y) = 15 THEN DEC(x, 16) END;
+      IF GetTerrainAt(x, y + 32) = 15 THEN INC(y, 32) END;
+      x := x DIV 16; y := y DIV 32;
+      secId := GetSectorByte(x * 16, y * 32);
+      IF (currentRegion >= 0) AND (currentRegion <= 9) THEN
+        regId := regions[currentRegion].image[secId DIV 64];
+        FOR j := 0 TO OpenCount - 1 DO
+          IF (openList[j].mapId = regId) AND
+             (openList[j].doorId = secId) AND
+             (openList[j].keyType = keyType) THEN
+            (* Match — open permanently (no SaveAndSet, direct write) *)
+            SetSectorByte(x * 16, y * 32, openList[j].new1);
+            k := openList[j].new2;
+            IF k > 0 THEN
+              l := openList[j].above;
+              IF l = 1 THEN
+                SetSectorByte(x * 16, (y - 1) * 32, k)
+              ELSIF l = 3 THEN
+                SetSectorByte((x - 1) * 16, y * 32, k)
+              ELSIF l = 4 THEN
+                SetSectorByte(x * 16, (y - 1) * 32, 87);
+                SetSectorByte((x + 1) * 16, y * 32, 86);
+                SetSectorByte((x + 1) * 16, (y - 1) * 32, 88)
+              ELSE
+                SetSectorByte((x + 1) * 16, y * 32, k);
+                IF l # 2 THEN
+                  SetSectorByte((x + 2) * 16, y * 32, openList[j].above)
+                END
+              END
+            END;
+            AddLogLine("It opened.");
+            bumped := FALSE;
+            RETURN TRUE
+          END
+        END
+      END
+    END
+  END;
+  RETURN FALSE
+END UseKeyOnDoor;
+
 BEGIN
   savedCount := 0;
+  bumped := FALSE;
   InitOpenList
 END Doors.
 

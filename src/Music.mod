@@ -343,6 +343,15 @@ BEGIN
   ClearQueued(dev)
 END StopMusic;
 
+PROCEDURE IsPlaying(): BOOLEAN;
+VAR i: INTEGER;
+BEGIN
+  FOR i := 0 TO 3 DO
+    IF voices[i].active THEN RETURN TRUE END
+  END;
+  RETURN FALSE
+END IsPlaying;
+
 PROCEDURE SetMood(mood: INTEGER);
 VAR i, tIdx: INTEGER;
 BEGIN
@@ -531,8 +540,8 @@ END RenderSample;
 PROCEDURE SequencerTick;
 VAR i: INTEGER;
 BEGIN
-  (* 2x multiplier empirically matches original playback speed.
-     Original runs timeclock += tempo at 50Hz PAL vblank. *)
+  (* 2x multiplier needed — empirically matches original playback speed.
+     Our sequencer ticks at 50Hz but original timing requires this. *)
   INC(timeclock, LONGINT(tempo) * 2);
   FOR i := 0 TO 3 DO
     ProcessVoice(voices[i])

@@ -6,12 +6,13 @@ FROM Platform IMPORT Init, Shutdown, BeginFrame, EndFrame,
 FROM GameState IMPORT InitGame, UpdateGame, running, FrameTime,
                       mapToggled, viewStatus;
 FROM Render IMPORT InitOverlay, DrawWorld, DrawItems, DrawActors,
-                   DrawHUD, DrawCompass, DrawMenu, DrawMessage,
-                   DrawInventory;
+                   DrawHUD, DrawMenu, DrawMessage,
+                   DrawInventory, DrawFairy, LoadCompass;
 FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
 FROM HudFont IMPORT LoadHudFont;
-FROM Compass IMPORT InitCompass;
+FROM Compass IMPORT InitCompass, DrawCompass;
+FROM Actor IMPORT actors;
 FROM Music IMPORT InitMusic, UpdateMusic, ShutdownMusic;
 FROM WorldObj IMPORT InitWorldObjects, LoadObjectSprites, DrawWorldObjects;
 FROM Missile IMPORT DrawMissiles;
@@ -30,9 +31,10 @@ BEGIN
   END;
 
   InitMenus;
-  InitCompass(ren);
   InitOverlay;
   InitGame;
+  InitCompass(ren);
+  LoadCompass;
   IF NOT LoadHudFont(ren) THEN
     WriteString("Warning: HUD font load failed"); WriteLn
   END;
@@ -62,10 +64,15 @@ BEGIN
       DrawWorldObjects;
       DrawItems;
       DrawActors;
+      DrawFairy;
       DrawMissiles
     END;
     DrawHUD;
-    DrawCompass;
+    IF actors[0].state = 12 THEN  (* StWalking *)
+      DrawCompass(ren, actors[0].facing)
+    ELSE
+      DrawCompass(ren, -1)  (* neutral — no direction highlight *)
+    END;
     DrawMenu;
     DrawMessage;
     EndFrame;

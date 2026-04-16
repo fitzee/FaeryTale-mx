@@ -1,8 +1,8 @@
 IMPLEMENTATION MODULE Render;
 
 FROM SYSTEM IMPORT ADDRESS;
-FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, Scale,
-                    DrawTexRegion;
+FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, Scale, TextH,
+                    DrawTexRegion, LoadBMPKeyedTexture;
 FROM Texture IMPORT Draw AS TexDraw, DrawRegion AS TexDrawRegion,
                     Width AS TexWidth, Height AS TexHeight,
                     SetColorMod;
@@ -18,14 +18,15 @@ FROM Actor IMPORT actors, actorCount, StDead, StDying, StStill,
 FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
-FROM GameState IMPORT cycle, msgText, msgTimer, regionFade;
+FROM GameState IMPORT cycle, msgText, msgTimer, regionFade,
+                     fairyActive, fairyX;
 FROM DayNight IMPORT brightness, isNight, lightlevel, GetFadeRGB,
                      PaletteTickDue;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
 FROM Assets IMPORT tileTex, hudTex, brotherTex, enemyTex, npcTex, shadowPB,
                    currentRegion, GetSectorByte, GetSectorByteForRegion,
                    GetMaskType, GetTilesBits, GetMapTag, DetectRegion,
-                   regions, NumRegions, LoadImgCached;
+                   regions, NumRegions, LoadImgCached, AssetPath;
 FROM PixBuf IMPORT PBuf, GetPix AS PBGetPix;
 FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
                  MItems, MMagic, MTalk, MBuy, MGame, MUse, MFile,
@@ -50,8 +51,25 @@ BEGIN
   fadeR := 255; fadeG := 255; fadeB := 255;
   wpnInited := FALSE;
   bowInited := FALSE;
+  compassBase := NIL;
+  compassHi := NIL;
   UpdateFade
 END InitOverlay;
+
+PROCEDURE LoadCompass;
+VAR p: ARRAY [0..127] OF CHAR;
+BEGIN
+  AssetPath("compass_base.bmp", p);
+  compassBase := LoadBMPKeyedTexture(p, 255, 0, 255);
+  AssetPath("compass_highlight.bmp", p);
+  compassHi := LoadBMPKeyedTexture(p, 255, 0, 255);
+  IF compassBase = NIL THEN
+    WriteString("Compass: base load failed"); WriteLn
+  END;
+  IF compassHi = NIL THEN
+    WriteString("Compass: highlight load failed"); WriteLn
+  END
+END LoadCompass;
 
 PROCEDURE S(v: INTEGER): INTEGER;
 BEGIN
@@ -62,6 +80,7 @@ END S;
 
 VAR
   fadeR, fadeG, fadeB: INTEGER;  (* cached palette fade values 0..100 *)
+  compassBase, compassHi: ADDRESS;  (* compass textures *)
 
 PROCEDURE UpdateFade;
 VAR r, g, b: INTEGER;
@@ -563,7 +582,7 @@ END InitBowOffsets;
 
 PROCEDURE DrawWeaponOverlay(i, sx, sy, frame: INTEGER);
 VAR weapon, wpnFrame, objFrame, ox, oy, f, dirGroup: INTEGER;
-    srcY, px, py, dx, dy: INTEGER;
+    srcY, px, py, dx, dy, bx, by: INTEGER;
 BEGIN
   IF objTex = NIL THEN RETURN END;
   weapon := actors[i].weapon;
@@ -633,6 +652,10 @@ BEGIN
         (* Map weapon pixel position back to bmask coordinates.
            bmask covers the 16x32 actor sprite area. Weapon offset
            shifts relative to that area. *)
+        (* Clamp weapon pixel to bmask bounds for building clipping.
+           Weapon pixels outside the 16x32 sprite area use the
+           nearest edge of the bmask — if that edge is masked,
+           the weapon pixel is also masked (behind building). *)
         IF (px + ox >= 0) AND (px + ox < SprW) AND
            (py + oy >= 0) AND (py + oy < SprH) THEN
           IF bmask[px + ox][py + oy] THEN
@@ -641,10 +664,14 @@ BEGIN
                           Scale, Scale)
           END
         ELSE
-          (* Outside bmask area — draw unmasked *)
-          DrawTexRegion(objTex, px, srcY + py, 1, 1,
-                        dx + px * Scale, dy + py * Scale,
-                        Scale, Scale)
+          (* Clamp to nearest bmask edge *)
+          bx := MIN(MAX(px + ox, 0), SprW - 1);
+          by := MIN(MAX(py + oy, 0), SprH - 1);
+          IF bmask[bx][by] THEN
+            DrawTexRegion(objTex, px, srcY + py, 1, 1,
+                          dx + px * Scale, dy + py * Scale,
+                          Scale, Scale)
+          END
         END
       END
     END
@@ -888,39 +915,39 @@ BEGIN
 END DrawHUD;
 
 PROCEDURE DrawCompass;
-CONST
-  (* Compass center in screen pixels.
-     HUD compass is at ~(591, 27) in 640x57 space.
-     Screen: 591*960/640=886, PlayH*3 + 27*171/57=429+81=510 *)
-  CX = 886;
-  CY = 510;
-  R  = 16;  (* radius to direction pip *)
-VAR dir, px, py: INTEGER;
+VAR dir, cx, cy, dx, dy, sz: INTEGER;
+    (* Compass direction offsets: dx,dy from center for each direction.
+       Our dirs: 0=N,1=NE,2=E,3=SE,4=S,5=SW,6=W,7=NW *)
+    ox, oy: ARRAY [0..7] OF INTEGER;
 BEGIN
-  IF actors[0].state = StStill THEN RETURN END;
   dir := actors[0].facing;
   IF (dir < 0) OR (dir > 7) THEN RETURN END;
 
-  (* Calculate pip position from compass center.
-     Our dirs: N=0,NE=1,E=2,SE=3,S=4,SW=5,W=6,NW=7 *)
-  CASE dir OF
-    0: px := CX;     py := CY - R |     (* N *)
-    1: px := CX + R + 13; py := CY - R - 14 |  (* NE *)
-    2: px := CX + R;      py := CY |           (* E *)
-    3: px := CX + R + 13; py := CY + R + 13 |  (* SE *)
-    4: px := CX;           py := CY + R |       (* S *)
-    5: px := CX - R - 15; py := CY + R + 15 |  (* SW *)
-    6: px := CX - R;      py := CY |           (* W *)
-    7: px := CX - R - 14; py := CY - R - 14    (* NW *)
-  ELSE
-    RETURN
-  END;
+  (* Compass center in screen coords.
+     HUD compass center is at ~(591, 27) in 640x57 space *)
+  cx := 591 * ScreenW * Scale DIV 640;
+  cy := PlayH * Scale + 27 * TextH * Scale DIV 57;
+  sz := 5 * ScreenW * Scale DIV 640;  (* pip size *)
+  IF sz < 3 THEN sz := 3 END;
 
-  (* Draw a bright red diamond pip *)
-  SetColor(ren, 255, 50, 0, 255);
-  FillRect(ren, px - 3, py - 3, 7, 7);
-  SetColor(ren, 255, 200, 50, 255);
-  FillRect(ren, px - 1, py - 1, 3, 3)
+  (* Direction offsets from center in screen pixels *)
+  dx := 11 * ScreenW * Scale DIV 640;
+  dy := 11 * TextH * Scale DIV 57;
+
+  ox[0] :=  0; oy[0] := -dy;   (* N *)
+  ox[1] :=  dx; oy[1] := -dy;  (* NE *)
+  ox[2] :=  dx; oy[2] :=  0;   (* E *)
+  ox[3] :=  dx; oy[3] :=  dy;  (* SE *)
+  ox[4] :=  0; oy[4] :=  dy;   (* S *)
+  ox[5] := -dx; oy[5] :=  dy;  (* SW *)
+  ox[6] := -dx; oy[6] :=  0;   (* W *)
+  ox[7] := -dx; oy[7] := -dy;  (* NW *)
+
+  (* Draw filled green diamond at active direction *)
+  SetColor(ren, 0, 176, 0, 255);
+  FillRect(ren, cx + ox[dir] - sz, cy + oy[dir] - sz DIV 2, sz * 2, sz);
+  SetColor(ren, 0, 220, 0, 255);
+  FillRect(ren, cx + ox[dir] - sz + 1, cy + oy[dir] - sz DIV 2 + 1, sz * 2 - 2, sz - 2)
 END DrawCompass;
 
 (* ---- Menu ---- *)
@@ -1164,6 +1191,7 @@ PROCEDURE DrawInventory;
   VAR i, srcY, dx, dy: INTEGER;
   BEGIN
     IF objTex = NIL THEN RETURN END;
+    SetColorMod(objTex, 255, 255, 255);  (* full brightness for inventory *)
     IF count <= 0 THEN RETURN END;
     IF count > maxShow THEN count := maxShow END;
     (* Source: frame imgNum in the 16x16 objects sheet, sub-region imgOff..imgOff+imgH *)
@@ -1229,6 +1257,19 @@ BEGIN
   DrawInvSlot(10, 14,100,  0, 8, 8,  1, stuff[29]);  (* Bone *)
   DrawInvSlot(12, 14,110,  0, 8, 8,  1, stuff[30])   (* Shard *)
 END DrawInventory;
+
+PROCEDURE DrawFairy;
+VAR sx, sy, sprY: INTEGER;
+BEGIN
+  IF objTex = NIL THEN RETURN END;
+  IF NOT fairyActive THEN RETURN END;
+  SetColorMod(objTex, 255, 255, 255);
+  sx := (fairyX - camX) * Scale;
+  sy := (actors[0].absY - camY) * Scale;
+  sprY := (100 + (cycle MOD 2)) * 16;  (* frames 100-101 alternate *)
+  DrawTexRegion(objTex, 0, sprY, 16, 16,
+                sx - S(8), sy - S(8), S(16), S(16))
+END DrawFairy;
 
 END Render.
 

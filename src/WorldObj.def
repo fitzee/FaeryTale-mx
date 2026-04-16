@@ -52,6 +52,7 @@ VAR
   objects: ARRAY [0..199] OF WorldObject;
   objCount: INTEGER;
   objTex: ADDRESS;  (* object sprite sheet texture *)
+  revealHidden: BOOLEAN;  (* when TRUE, status=5 objects are visible/pickable *)
 
 PROCEDURE AddObj(x, y, id, stat, reg: INTEGER);
 PROCEDURE InitWorldObjects;

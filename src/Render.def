@@ -1,6 +1,7 @@
 DEFINITION MODULE Render;
 
 PROCEDURE InitOverlay;
+PROCEDURE LoadCompass;
 PROCEDURE DrawWorld;
 PROCEDURE DrawItems;
 PROCEDURE DrawActors;
@@ -11,5 +12,6 @@ PROCEDURE DrawMinimap;
 PROCEDURE DrawRegionFade;
 PROCEDURE DrawMessage;
 PROCEDURE DrawInventory;
+PROCEDURE DrawFairy;
 
 END Render.

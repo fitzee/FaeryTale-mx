@@ -85,7 +85,7 @@ BEGIN
   activeBrother := Julian;
 
   Assign("Julian", brothers[Julian].name);
-  brothers[Julian].vitality := 100;
+  brothers[Julian].vitality := 23;  (* 15 + 35/4 *)
   brothers[Julian].weapon := 1;
   brothers[Julian].brave := 35;
   brothers[Julian].luck := 20;
@@ -98,7 +98,7 @@ BEGIN
   brothers[Julian].alive := TRUE;
 
   Assign("Philip", brothers[Philip].name);
-  brothers[Philip].vitality := 80;
+  brothers[Philip].vitality := 20;  (* 15 + 20/4 *)
   brothers[Philip].weapon := 0;
   brothers[Philip].brave := 20;
   brothers[Philip].luck := 35;
@@ -110,7 +110,7 @@ BEGIN
   brothers[Philip].alive := TRUE;
 
   Assign("Kevin", brothers[Kevin].name);
-  brothers[Kevin].vitality := 60;
+  brothers[Kevin].vitality := 18;  (* 15 + 15/4 *)
   brothers[Kevin].weapon := 0;
   brothers[Kevin].brave := 15;
   brothers[Kevin].luck := 20;
@@ -148,6 +148,10 @@ BEGIN
     next := (activeBrother + i) MOD NumBrothers;
     IF brothers[next].alive THEN
       activeBrother := next;
+      (* New brother starts fresh — clear items, give dirk *)
+      ClearInventory(brothers[next]);
+      brothers[next].stuff[0] := 1;  (* dirk *)
+      brothers[next].weapon := 1;
       RestoreBrotherState;
       RETURN TRUE
     END

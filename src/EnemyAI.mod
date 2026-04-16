@@ -84,6 +84,7 @@ END StepMove;
 
 PROCEDURE SelectTactic(i, tactic: INTEGER);
 VAR r: BOOLEAN;
+    xd, yd: INTEGER;
 BEGIN
   (* Original do_tactic: r = !(rand()&7) — 1/8 chance gate on set_course.
      For ATTACK2 goal: r = !(rand()&3) — 1/4 chance instead. *)
@@ -99,9 +100,18 @@ BEGIN
     IF r THEN SetCourse(i, actors[0].absX, actors[0].absY) END
 
   ELSIF tactic = TacShoot THEN
-    SetCourse(i, actors[0].absX, actors[0].absY);
-    IF (Rand(2) = 0) AND (actors[i].state < StShoot1) THEN
+    (* Original: 50% chance AND alignment check before firing.
+       Must be within 8px on one axis OR on diagonal arc. *)
+    CalcDist(actors[i].absX, actors[i].absY,
+             actors[0].absX, actors[0].absY, xd, yd);
+    IF (Rand(2) = 0) AND
+       ((xd < 8) OR (yd < 8) OR
+        ((xd > yd - 5) AND (xd < yd + 7))) AND
+       (actors[i].state < StShoot1) THEN
+      SetCourse(i, actors[0].absX, actors[0].absY);
       actors[i].state := StShoot1
+    ELSE
+      SetCourse(i, actors[0].absX, actors[0].absY)
     END
 
   ELSIF tactic = TacRandom THEN
@@ -215,28 +225,32 @@ BEGIN
 
   (* === HOSTILE MODES === *)
   IF mode <= GoalArcher2 THEN
-    (* Original: r = !bitrand(15) — 1/16 chance per frame *)
+    (* Original: r = !bitrand(15) — 1/16 chance to SELECT NEW tactic *)
     r := (Rand(16) = 0);
 
-    (* Tactic selection — only when r is TRUE *)
+    (* Select NEW tactic — only when r is TRUE *)
     IF r THEN
       IF actors[i].weapon < 1 THEN
         mode := GoalConfused;
-        SelectTactic(i, TacRandom)
+        actors[i].tactic := TacRandom
       ELSIF (actors[i].vitality < 6) AND (Rand(2) = 0) THEN
-        SelectTactic(i, TacEvade)
+        actors[i].tactic := TacEvade
       ELSIF mode >= GoalArcher1 THEN
         IF (xd < 40) AND (yd < 30) THEN
-          SelectTactic(i, TacBackup)
+          actors[i].tactic := TacBackup
         ELSIF (xd < 70) AND (yd < 70) THEN
-          SelectTactic(i, TacShoot)
+          actors[i].tactic := TacShoot
         ELSE
-          SelectTactic(i, TacPursue)
+          actors[i].tactic := TacPursue
         END
       ELSE
-        SelectTactic(i, TacPursue)
+        actors[i].tactic := TacPursue
       END
     END;
+
+    (* Execute current tactic EVERY FRAME — key fix matching original
+       do_tactic(i, tactic) at fmain.c line 2170 *)
+    SelectTactic(i, actors[i].tactic);
 
     (* Movement execution — every frame if WALKING *)
     IF actors[i].state = StWalking THEN
@@ -245,7 +259,7 @@ BEGIN
       END
     END;
 
-    (* Melee engagement check *)
+    (* Melee engagement check — matching original lines 2162-2167 *)
     thresh := 14 - mode;
     IF thresh < 8 THEN thresh := 8 END;
     IF xd > yd THEN maxDist := xd ELSE maxDist := yd END;
@@ -255,15 +269,27 @@ BEGIN
       END
     ELSIF (BAND(CARDINAL(actors[i].weapon), 4) = 0) AND
           (maxDist < thresh) THEN
+      (* Original: set_course + if state >= WALKING then state = FIGHTING *)
       SetCourse(i, actors[0].absX, actors[0].absY);
       actors[i].state := StFighting
     END
 
   (* === NON-HOSTILE MODES === *)
   ELSIF mode = GoalFlee THEN
-    IF Rand(8) = 0 THEN SelectTactic(i, TacBackup) END;
+    (* Execute BACKUP every frame, but if blocked try random direction *)
+    IF actors[i].tactic = TacFrust THEN
+      (* Stuck — pick random direction to escape *)
+      actors[i].facing := Rand(8);
+      actors[i].state := StWalking;
+      actors[i].tactic := TacBackup
+    ELSE
+      SelectTactic(i, TacBackup)
+    END;
     IF actors[i].state = StWalking THEN
-      IF NOT StepMove(i) THEN actors[i].state := StStill END
+      IF NOT StepMove(i) THEN
+        actors[i].facing := Rand(8);
+        actors[i].state := StWalking
+      END
     END
 
   ELSIF mode = GoalFollow THEN
@@ -303,5 +329,5 @@ BEGIN
 END UpdateEnemies;
 
 BEGIN
-  rng := 54321
+  rng := 77777  (* will be mixed by first Rand calls *)
 END EnemyAI.

@@ -64,7 +64,7 @@ BEGIN
   AddObj(21626, 15446, 18, 1, 3);    (* blue stone *)
   AddObj(21616, 15456, 13, 1, 3);    (* money *)
   AddObj(21636, 15456, 17, 1, 3);    (* gold ring *)
-  AddObj(20117, 14222, 19, 1, 3);    (* gold jewel *)
+  AddObj(20117, 14222, 19, 1, 3);    (* green jewel *)
   AddObj(24185,  9840, 16, 1, 3);    (* sacks *)
   AddObj(25769, 10617, 13, 1, 3);    (* money *)
   AddObj(25678, 10703, 18, 1, 3);    (* blue stone *)
@@ -169,7 +169,8 @@ BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
   FOR i := 0 TO objCount - 1 DO
-    IF (objects[i].status = 1) AND
+    IF ((objects[i].status = 1) OR
+        (revealHidden AND (objects[i].status = 5))) AND
        ((objects[i].region = currentRegion) OR
         (objects[i].region = -1)) THEN
       sx := (objects[i].x - camX) * Scale;
@@ -205,7 +206,8 @@ PROCEDURE CheckObjectPickup(heroX, heroY: INTEGER): INTEGER;
 VAR i, dx, dy, id: INTEGER;
 BEGIN
   FOR i := 0 TO objCount - 1 DO
-    IF (objects[i].status = 1) AND
+    IF ((objects[i].status = 1) OR
+        (revealHidden AND (objects[i].status = 5))) AND
        ((objects[i].region = currentRegion) OR
         (objects[i].region = -1)) THEN
       dx := heroX - objects[i].x;
