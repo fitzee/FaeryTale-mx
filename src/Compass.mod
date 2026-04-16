@@ -5,7 +5,7 @@ IMPLEMENTATION MODULE Compass;
 
 FROM Gfx IMPORT Renderer;
 FROM Texture IMPORT Tex;
-FROM Platform IMPORT PlayH, Scale, LoadBMPKeyedTexture, DrawTexRegion;
+FROM Platform IMPORT PlayH, Scale, LoadBMPTexture, DrawTexRegion;
 FROM Assets IMPORT AssetPath;
 FROM Strings IMPORT Assign;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
@@ -40,7 +40,7 @@ BEGIN
       Assign("compass_8.bmp", num)
     END;
     AssetPath(num, p);
-    dirTex[i] := LoadBMPKeyedTexture(p, 255, 0, 255);
+    dirTex[i] := LoadBMPTexture(p);
     IF dirTex[i] = NIL THEN
       WriteString("Compass FAIL: "); WriteString(num); WriteLn
     ELSE

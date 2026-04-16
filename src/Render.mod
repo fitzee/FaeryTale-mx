@@ -213,7 +213,7 @@ END DrawWorld;
 VAR
   bmask: ARRAY [0..15] OF ARRAY [0..31] OF BOOLEAN;
 
-PROCEDURE BuildSpriteMaskFor(actorIdx: INTEGER);
+PROCEDURE BuildSpriteMaskAt(worldX, worldY, groundY: INTEGER);
 VAR xm, ym, imx, imy, px, py, secByte, maskType: INTEGER;
     maskY, ystop, heroSec, ground: INTEGER;
     xbw, ym1, ym2, blitwide: INTEGER;
@@ -222,7 +222,6 @@ VAR xm, ym, imx, imy, px, py, secByte, maskType: INTEGER;
     localX, localY, shadowX, shadowY: INTEGER;
     doMask: BOOLEAN;
 BEGIN
-  (* Init: all pixels drawable *)
   FOR px := 0 TO 15 DO
     FOR py := 0 TO 31 DO
       bmask[px][py] := TRUE
@@ -232,11 +231,9 @@ BEGIN
   IF currentRegion < 0 THEN RETURN END;
   IF shadowPB = NIL THEN RETURN END;
 
-  (* Sprite world position (top-left).
-     Sprite is 16x32, drawn at (absX-8, absY-16). *)
-  sprWorldX := actors[actorIdx].absX - 8;
-  sprWorldY := actors[actorIdx].absY - 16;
-  ground := actors[actorIdx].absY - camY + 16;
+  sprWorldX := worldX;
+  sprWorldY := worldY;
+  ground := groundY;
 
   xbw := sprWorldX DIV TilePixW;
   ym1 := sprWorldY DIV TilePixH;
@@ -298,6 +295,14 @@ BEGIN
       END
     END
   END
+END BuildSpriteMaskAt;
+
+PROCEDURE BuildSpriteMaskFor(actorIdx: INTEGER);
+BEGIN
+  BuildSpriteMaskAt(
+    actors[actorIdx].absX - 8,
+    actors[actorIdx].absY - 16,
+    actors[actorIdx].absY - camY + 16)
 END BuildSpriteMaskFor;
 
 (* ---- Items ---- *)
@@ -646,26 +651,23 @@ BEGIN
   dy := sy - S(16) + S(oy);
 
   IF i = 0 THEN
-    (* Pixel-by-pixel with bmask clipping, same as DrawBrotherSprite *)
+    (* Build a fresh bmask at the WEAPON's world position.
+       Original: weapon goes through same masking pipeline as character.
+       Weapon top-left in world = actor position + weapon offset - sprite center. *)
+    BuildSpriteMaskAt(
+      actors[0].absX - 8 + ox,
+      actors[0].absY - 16 + oy,
+      actors[0].absY - camY + 16);
+    (* Draw weapon through bmask — pixel coords are now relative to weapon origin *)
     FOR py := 0 TO WpnSprH - 1 DO
       FOR px := 0 TO WpnSprW - 1 DO
-        (* Map weapon pixel position back to bmask coordinates.
-           bmask covers the 16x32 actor sprite area. Weapon offset
-           shifts relative to that area. *)
-        (* Clamp weapon pixel to bmask bounds for building clipping.
-           Weapon pixels outside the 16x32 sprite area use the
-           nearest edge of the bmask — if that edge is masked,
-           the weapon pixel is also masked (behind building). *)
-        IF (px + ox >= 0) AND (px + ox < SprW) AND
-           (py + oy >= 0) AND (py + oy < SprH) THEN
-          IF bmask[px + ox][py + oy] THEN
+        IF (px < SprW) AND (py < SprH) THEN
+          IF bmask[px][py] THEN
             DrawTexRegion(objTex, px, srcY + py, 1, 1,
                           dx + px * Scale, dy + py * Scale,
                           Scale, Scale)
           END
         ELSE
-          (* Outside bmask area — draw unmasked since we can't
-             determine building overlap without the mask *)
           DrawTexRegion(objTex, px, srcY + py, 1, 1,
                         dx + px * Scale, dy + py * Scale,
                         Scale, Scale)
@@ -673,9 +675,26 @@ BEGIN
       END
     END
   ELSE
-    DrawTexRegion(objTex,
-                  0, srcY, WpnSprW, WpnSprH,
-                  dx, dy, S(WpnSprW), S(WpnSprH))
+    (* Enemies: also build bmask at weapon position for building clipping *)
+    BuildSpriteMaskAt(
+      actors[i].absX - 8 + ox,
+      actors[i].absY - 16 + oy,
+      actors[i].absY - camY + 16);
+    FOR py := 0 TO WpnSprH - 1 DO
+      FOR px := 0 TO WpnSprW - 1 DO
+        IF (px < SprW) AND (py < SprH) THEN
+          IF bmask[px][py] THEN
+            DrawTexRegion(objTex, px, srcY + py, 1, 1,
+                          dx + px * Scale, dy + py * Scale,
+                          Scale, Scale)
+          END
+        ELSE
+          DrawTexRegion(objTex, px, srcY + py, 1, 1,
+                        dx + px * Scale, dy + py * Scale,
+                        Scale, Scale)
+        END
+      END
+    END
   END
 END DrawWeaponOverlay;
 
