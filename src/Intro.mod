@@ -12,6 +12,8 @@ FROM Canvas IMPORT SetColor, Clear;
 FROM Assets IMPORT AssetPath;
 FROM Music IMPORT SetMood;
 FROM GameState IMPORT FrameTime;
+FROM HudFont IMPORT DrawScreenStr, ScreenStrWidth;
+FROM Texture IMPORT SetColorMod;
 FROM InOut IMPORT WriteString, WriteLn;
 
 CONST
@@ -264,6 +266,55 @@ BEGIN
   END
 END FlipScan;
 
+PROCEDURE CenterStr(s: ARRAY OF CHAR; y, sc: INTEGER);
+VAR w, x, sw: INTEGER;
+BEGIN
+  sw := ScreenW * Scale;
+  w := ScreenStrWidth(s, sc);
+  x := (sw - w) DIV 2;
+  DrawScreenStr(ren, s, x, y, sc)
+END CenterStr;
+
+PROCEDURE ShowCredits;
+VAR i, sw, sh, sc: INTEGER;
+BEGIN
+  sw := ScreenW * Scale;
+  sh := PlayH * Scale;
+  sc := 2;  (* scale factor for text *)
+
+  (* Draw credits with fade in *)
+  FOR i := 0 TO 15 DO
+    IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
+    INC(introTick);
+    BeginFrame;
+    SetColor(ren, 0, 0, 0, 255);
+    Clear(ren);
+    CenterStr('"The Faery Tale Adventure"', sh DIV 6, sc);
+    CenterStr("Animation, Programming and Music", sh * 2 DIV 6, sc);
+    CenterStr("by", sh * 2 DIV 6 + 20 * sc, sc);
+    CenterStr("David Joiner", sh * 3 DIV 6, sc);
+    CenterStr("Copyright (C) 1986 MicroIllusions", sh * 4 DIV 6, sc);
+    CenterStr("Modula-2 port by Matt Fitzgerald", sh * 4 DIV 6 + 20 * sc, sc);
+    EndFrame;
+    DelayMs(FrameTime * 3)
+  END;
+
+  (* Hold *)
+  Wait(120);
+  IF skipped THEN RETURN END;
+
+  (* Fade out — just show black *)
+  FOR i := 15 TO 0 BY -1 DO
+    IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
+    INC(introTick);
+    BeginFrame;
+    SetColor(ren, 0, 0, 0, 255);
+    Clear(ren);
+    EndFrame;
+    DelayMs(FrameTime * 3)
+  END
+END ShowCredits;
+
 PROCEDURE RunIntro;
 BEGIN
   skipped := FALSE;
@@ -280,6 +331,10 @@ BEGIN
   DelayMs(500);
 
   SetMood(MoodIntro);
+
+  (* 0. Credits screen — white text on black, matching original *)
+  ShowCredits;
+  IF skipped THEN RETURN END;
 
   (* 1. Black screen *)
   BeginFrame; SetColor(ren, 0, 0, 0, 255); Clear(ren); EndFrame;

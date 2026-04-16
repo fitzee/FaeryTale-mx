@@ -171,6 +171,48 @@ BEGIN
   RETURN w
 END HudStrWidth;
 
+(* --- Screen-space text (for credits, not HUD) --- *)
+
+PROCEDURE DrawScreenStr(ren: Renderer; s: ARRAY OF CHAR;
+                        sx, sy, sc: INTEGER);
+VAR i, cx, idx, dw, dh: INTEGER;
+BEGIN
+  IF amberTex = NIL THEN RETURN END;
+  SetColorMod(amberTex, 255, 255, 255);  (* white text *)
+  cx := sx;
+  dh := AmberH * sc;
+  i := 0;
+  WHILE (i <= HIGH(s)) AND (s[i] # 0C) DO
+    idx := ORD(s[i]) - amberLo;
+    IF (idx >= 0) AND (idx < amberNum) THEN
+      IF amberGlyphs[idx].bitLen > 0 THEN
+        dw := amberGlyphs[idx].bitLen * sc;
+        TexDrawRegion(ren, amberTex,
+                      amberGlyphs[idx].locStart, 0,
+                      amberGlyphs[idx].bitLen, AmberH,
+                      cx, sy, dw, dh)
+      END;
+      INC(cx, amberGlyphs[idx].spacing * sc)
+    END;
+    INC(i)
+  END
+END DrawScreenStr;
+
+PROCEDURE ScreenStrWidth(s: ARRAY OF CHAR; sc: INTEGER): INTEGER;
+VAR i, w, idx: INTEGER;
+BEGIN
+  w := 0;
+  i := 0;
+  WHILE (i <= HIGH(s)) AND (s[i] # 0C) DO
+    idx := ORD(s[i]) - amberLo;
+    IF (idx >= 0) AND (idx < amberNum) THEN
+      INC(w, amberGlyphs[idx].spacing * sc)
+    END;
+    INC(i)
+  END;
+  RETURN w
+END ScreenStrWidth;
+
 (* --- Topaz: menu labels --- *)
 
 PROCEDURE DrawMenuStr(ren: Renderer; s: ARRAY OF CHAR;

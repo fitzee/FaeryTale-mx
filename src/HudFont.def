@@ -24,4 +24,9 @@ PROCEDURE DrawMenuStr(ren: Renderer; s: ARRAY OF CHAR;
                       hx, hy, nchars, textOff: INTEGER;
                       fgR, fgG, fgB, bgR, bgG, bgB: INTEGER);
 
+(* Draw amber text at raw screen pixel coordinates (not HUD space) *)
+PROCEDURE DrawScreenStr(ren: Renderer; s: ARRAY OF CHAR;
+                        sx, sy, scale: INTEGER);
+PROCEDURE ScreenStrWidth(s: ARRAY OF CHAR; scale: INTEGER): INTEGER;
+
 END HudFont.
