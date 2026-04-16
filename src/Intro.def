@@ -1,0 +1,7 @@
+DEFINITION MODULE Intro;
+
+(* Opening credits sequence — book pages introducing the brothers. *)
+
+PROCEDURE RunIntro;
+
+END Intro.

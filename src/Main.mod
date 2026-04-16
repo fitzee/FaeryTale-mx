@@ -14,6 +14,7 @@ FROM HudFont IMPORT LoadHudFont;
 FROM Compass IMPORT InitCompass, DrawCompass;
 FROM Actor IMPORT actors;
 FROM Music IMPORT InitMusic, UpdateMusic, ShutdownMusic;
+FROM Intro IMPORT RunIntro;
 FROM WorldObj IMPORT InitWorldObjects, LoadObjectSprites, DrawWorldObjects;
 FROM Missile IMPORT DrawMissiles;
 FROM SFX IMPORT InitSFX, ShutdownSFX;
@@ -47,6 +48,8 @@ BEGIN
     WriteString("Warning: SFX init failed"); WriteLn
   END;
   InitDebugMap;
+
+  RunIntro;
 
   WHILE running DO
     frameStart := GetTicks();
