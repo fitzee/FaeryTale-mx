@@ -664,14 +664,11 @@ BEGIN
                           Scale, Scale)
           END
         ELSE
-          (* Clamp to nearest bmask edge *)
-          bx := MIN(MAX(px + ox, 0), SprW - 1);
-          by := MIN(MAX(py + oy, 0), SprH - 1);
-          IF bmask[bx][by] THEN
-            DrawTexRegion(objTex, px, srcY + py, 1, 1,
-                          dx + px * Scale, dy + py * Scale,
-                          Scale, Scale)
-          END
+          (* Outside bmask area — draw unmasked since we can't
+             determine building overlap without the mask *)
+          DrawTexRegion(objTex, px, srcY + py, 1, 1,
+                        dx + px * Scale, dy + py * Scale,
+                        Scale, Scale)
         END
       END
     END
