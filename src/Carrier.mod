@@ -169,12 +169,10 @@ END UpdateSwanCarrier;
 PROCEDURE SpawnTurtle;
 VAR i, tx, ty, terrain: INTEGER;
 BEGIN
-  IF NOT HasStuff(StShell) THEN RETURN END;
-
-  (* Find nearby water tile to spawn turtle *)
-  FOR i := 0 TO 24 DO
-    tx := actors[0].absX + (i MOD 5 - 2) * 32;
-    ty := actors[0].absY + (i DIV 5 - 2) * 32;
+  (* Find nearby water tile to spawn turtle — wider search *)
+  FOR i := 0 TO 80 DO
+    tx := actors[0].absX + (i MOD 9 - 4) * 32;
+    ty := actors[0].absY + (i DIV 9 - 4) * 32;
     terrain := GetTerrainAt(tx, ty);
     IF (terrain = 4) OR (terrain = 5) THEN
       (* Found water — spawn turtle here *)
@@ -193,7 +191,19 @@ BEGIN
       RETURN
     END
   END;
-  WriteString("Carrier: no water nearby for turtle"); WriteLn
+  (* No water found — spawn next to player anyway *)
+  actors[CarrierSlot].absX := actors[0].absX + 30;
+  actors[CarrierSlot].absY := actors[0].absY + 30;
+  actors[CarrierSlot].actorType := TypeCarrier;
+  actors[CarrierSlot].state := StStill;
+  actors[CarrierSlot].vitality := 50;
+  actors[CarrierSlot].weapon := 0;
+  actors[CarrierSlot].environ := 0;
+  actors[CarrierSlot].visible := TRUE;
+  actors[CarrierSlot].race := 5;
+  activeCarrier := 5;
+  IF actorCount < 4 THEN actorCount := 4 END;
+  WriteString("Carrier: turtle spawned (no water)"); WriteLn
 END SpawnTurtle;
 
 (* Check if player entered swan extent (2118-2618, 27237-27637) with lasso *)

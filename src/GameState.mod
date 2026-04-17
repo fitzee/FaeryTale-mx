@@ -690,7 +690,7 @@ BEGIN
        9: ShowMessage("Found a mace!"); GiveStuff(1) |
       10: ShowMessage("Found a bow!"); GiveStuff(3) |
       12: ShowMessage("Found a dirk!"); GiveStuff(0) |
-     102: ShowMessage("Found a turtle!") |
+     102: (* Turtle eggs — not pickable, part of quest scenery *) |
      114: ShowMessage("Found a blue key!"); GiveStuff(18) |
      145: ShowMessage("Found a magic wand!"); GiveStuff(4) |
      148: ShowMessage("Found some fruit!"); GiveStuff(24) |
