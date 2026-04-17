@@ -52,7 +52,7 @@ BEGIN
   InitMenuDef(menus[MTalk],  LabTalk,   8, 9);
   InitMenuDef(menus[MBuy],   LabBuy,   12, 10);
   InitMenuDef(menus[MGame],  LabGame,  10, 2);
-  InitMenuDef(menus[MSave],  LabSave,   7, 0);
+  InitMenuDef(menus[MSave],  LabSave,   7, 2);
   InitMenuDef(menus[MKeys],  LabKeys,  11, 8);
   InitMenuDef(menus[MGive],  LabGive,   9, 10);
   InitMenuDef(menus[MUse],   LabUse,   10, 8);
