@@ -44,7 +44,8 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle, riding;
-FROM Quest IMPORT CheckRescue, CheckWinCondition, SaveGame, LoadGame;
+FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
+               SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
 FROM Narration IMPORT InitPlace, UpdatePlace, Event;
 
@@ -1036,7 +1037,7 @@ BEGIN
   END;
   UpdateCarriers;
   CheckRescue(actors[0].absX, actors[0].absY);
-  IF CheckWinCondition() THEN running := FALSE END;
+  IF CheckWinCondition() THEN ShowWinScreen; running := FALSE END;
   CheckDoors;
   UpdateCamera(actors[0].absX, actors[0].absY);
   prevRegion := currentRegion;

@@ -10,6 +10,13 @@ FROM Assets IMPORT currentRegion;
 FROM WorldObj IMPORT objects, objCount;
 FROM HudLog IMPORT AddLogLine;
 FROM BinaryIO IMPORT OpenRead, OpenWrite, Close, ReadBytes, WriteBytes, Done;
+FROM Platform IMPORT ren, ScreenW, PlayH, TextH, Scale,
+                    LoadBMPTexture, BeginFrame, EndFrame, DelayMs,
+                    PollInput, InputState, DirNone;
+FROM Texture IMPORT Tex, DrawRegion AS TexDrawRegion;
+FROM Canvas IMPORT SetColor, Clear;
+FROM Music IMPORT StopMusic;
+FROM HudFont IMPORT DrawScreenStr, ScreenStrWidth, SetFontColor, ResetFontColor;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 VAR
@@ -182,6 +189,59 @@ BEGIN
   WriteString("Quest: loaded from "); WriteString(path); WriteLn;
   RETURN TRUE
 END LoadGame;
+
+PROCEDURE CenterText(s: ARRAY OF CHAR; y, sc: INTEGER);
+VAR w, x, sw: INTEGER;
+BEGIN
+  sw := ScreenW * Scale;
+  w := ScreenStrWidth(s, sc);
+  x := (sw - w) DIV 2;
+  DrawScreenStr(ren, s, x, y, sc)
+END CenterText;
+
+PROCEDURE ShowWinScreen;
+VAR winTex: Tex;
+    p: ARRAY [0..127] OF CHAR;
+    sw, sh, i: INTEGER;
+    inp: InputState;
+BEGIN
+  sw := ScreenW * Scale;
+  sh := (PlayH + TextH) * Scale;
+
+  StopMusic;
+
+  (* Show victory text placard first *)
+  SetFontColor(204, 0, 0);  (* red text *)
+  FOR i := 1 TO 300 DO
+    PollInput(inp);
+    BeginFrame;
+    SetColor(ren, 0, 0, 0, 255);
+    Clear(ren);
+    CenterText("The Talisman has been recovered!", sh DIV 4, 2);
+    CenterText("The village of Tambry is saved!", sh DIV 4 + 30, 2);
+    CenterText("Congratulations!", sh * 2 DIV 4, 3);
+    EndFrame;
+    DelayMs(33);
+    IF inp.attack OR (inp.dirKey # DirNone) THEN i := 300 END
+  END;
+  ResetFontColor;
+
+  (* Load and show win picture *)
+  Assign("assets/winpic.bmp", p);
+  winTex := LoadBMPTexture(p);
+  IF winTex # NIL THEN
+    FOR i := 1 TO 300 DO
+      PollInput(inp);
+      BeginFrame;
+      SetColor(ren, 0, 0, 0, 255);
+      Clear(ren);
+      TexDrawRegion(ren, winTex, 0, 0, 320, 200, 0, 0, sw, sh);
+      EndFrame;
+      DelayMs(33);
+      IF inp.attack OR (inp.dirKey # DirNone) THEN i := 300 END
+    END
+  END
+END ShowWinScreen;
 
 BEGIN
   princessRescued := FALSE;
