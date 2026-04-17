@@ -11,6 +11,8 @@ FROM Actor IMPORT actors, actorCount,
 FROM World IMPORT camX, camY;
 FROM Brothers IMPORT brothers, activeBrother, HasStuff;
 FROM Assets IMPORT GetTerrainAt, currentRegion;
+FROM Strings IMPORT Assign;
+FROM NPC IMPORT GetSpeech;
 FROM InOut IMPORT WriteString, WriteLn;
 
 CONST
@@ -30,11 +32,29 @@ PROCEDURE Abs(x: INTEGER): INTEGER;
 BEGIN IF x < 0 THEN RETURN -x ELSE RETURN x END
 END Abs;
 
+PROCEDURE TalkToCarrier(VAR speech: ARRAY OF CHAR): BOOLEAN;
+VAR dx, dy: INTEGER;
+BEGIN
+  IF activeCarrier # 5 THEN RETURN FALSE END;
+  dx := Abs(actors[0].absX - actors[CarrierSlot].absX);
+  dy := Abs(actors[0].absY - actors[CarrierSlot].absY);
+  IF (dx > 40) OR (dy > 40) THEN RETURN FALSE END;
+  (* Turtle: give shell if not owned, otherwise just talk *)
+  IF brothers[activeBrother].stuff[StShell] > 0 THEN
+    GetSpeech(57, speech)  (* "Just hop on my back if you need a ride" *)
+  ELSE
+    brothers[activeBrother].stuff[StShell] := 1;
+    GetSpeech(56, speech)  (* "Thank you for saving my eggs! Take this shell" *)
+  END;
+  RETURN TRUE
+END TalkToCarrier;
+
 PROCEDURE InitCarriers;
 BEGIN
   riding := RideNone;
   activeCarrier := 0;
   raftProx := 0;
+  turtleEggs := FALSE;
 
   (* Set up raft at fixed location — slot 1 *)
   actors[RaftSlot].absX := RaftX;

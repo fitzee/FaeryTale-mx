@@ -13,9 +13,11 @@ CONST
 VAR
   riding: INTEGER;        (* 0=none, 1=raft, 5=turtle, 11=swan *)
   activeCarrier: INTEGER; (* carrier type loaded, 0=none *)
+  turtleEggs: BOOLEAN;    (* TRUE when in turtle egg extent, snakes spawned *)
 
 PROCEDURE InitCarriers;
 PROCEDURE UpdateCarriers;
-PROCEDURE SpawnTurtle;    (* called from USE→Shell *)
+PROCEDURE SpawnTurtle;    (* called from USE→Shell or aftermath *)
+PROCEDURE TalkToCarrier(VAR speech: ARRAY OF CHAR): BOOLEAN;
 
 END Carrier.

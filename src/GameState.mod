@@ -43,7 +43,8 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
                      AddObj;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
-FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle, riding;
+FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
+               TalkToCarrier, riding, turtleEggs;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
                SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -714,7 +715,8 @@ END HandleWorldPickup;
 PROCEDURE HandleTalk;
 VAR speech: ARRAY [0..127] OF CHAR;
 BEGIN
-  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN ShowMessage(speech)
+  IF TalkToCarrier(speech) THEN ShowMessage(speech)
+  ELSIF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN ShowMessage(speech)
   ELSE ShowMessage("Nobody to talk to here.") END
 END HandleTalk;
 
@@ -832,6 +834,12 @@ BEGIN
       IntToStr(flee, numStr); Assign(numStr, msgBuf);
       Concat(msgBuf, " foes fled in retreat.", msgBuf); ShowMessage(msgBuf)
     END
+  END;
+  (* Turtle eggs: spawn turtle after guards defeated *)
+  IF turtleEggs THEN
+    SpawnTurtle;
+    turtleEggs := FALSE;
+    ShowMessage("The turtle appears, grateful you saved its eggs!")
   END
 END BattleAftermath;
 

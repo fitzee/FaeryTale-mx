@@ -10,6 +10,7 @@ FROM Actor IMPORT actors, actorCount, MaxActors,
 FROM Movement IMPORT ProxCheck;
 FROM Platform IMPORT GetTicks;
 FROM Assets IMPORT currentRegion, GetTerrainAt;
+FROM Carrier IMPORT turtleEggs;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -377,6 +378,23 @@ BEGIN
     IF NOT EnemiesNearby(heroX, heroY) THEN
       PlaceEncounter(heroX, heroY)
     END
+  END;
+
+  (* === Forced encounters for special extents (etype >= 50) === *)
+  IF (et = 61) AND (NOT turtleEggs) AND (NOT loadPending) AND
+     (NOT EnemiesNearby(heroX, heroY)) AND
+     (CountLivingEnemies() = 0) THEN
+    (* Turtle eggs: force snake spawn *)
+    turtleEggs := TRUE;
+    pendingRace := extents[ei].v3;  (* race 4 = snakes *)
+    cnt := extents[ei].v1;
+    IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
+    IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
+    IF cnt < 1 THEN cnt := 1 END;
+    pendingCount := cnt;
+    pendingMix := 0;
+    loadPending := TRUE;
+    RETURN
   END;
 
   (* === PHASE 1: Queue new random encounter ===

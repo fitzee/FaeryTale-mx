@@ -18,6 +18,7 @@ FROM Actor IMPORT actors, actorCount,
 FROM Movement IMPORT MoveActor;
 FROM Missile IMPORT FireMissile;
 FROM WorldObj IMPORT AddObj;
+FROM Carrier IMPORT turtleEggs;
 
 VAR
   rng: INTEGER;
@@ -228,8 +229,12 @@ BEGIN
     (* Original: r = !bitrand(15) — 1/16 chance to SELECT NEW tactic *)
     r := (Rand(16) = 0);
 
+    (* Snakes with turtle eggs: force EGG_SEEK — walk to eggs *)
+    IF turtleEggs AND (actors[i].race = 4) THEN
+      SetCourse(i, 23087, 5667);
+      actors[i].state := StWalking
     (* Select NEW tactic — only when r is TRUE *)
-    IF r THEN
+    ELSIF r THEN
       IF actors[i].weapon < 1 THEN
         mode := GoalConfused;
         actors[i].tactic := TacRandom
