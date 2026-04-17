@@ -651,12 +651,12 @@ BEGIN
       ELSIF optIdx = 6 THEN
         running := FALSE  (* Exit *)
       ELSE GoMenu(0) END |
-    9: (* File menu: slots A-H = optIdx 0-7 mapped to 5-12 *)
-      IF (optIdx >= 5) AND (optIdx <= 12) THEN
+    9: (* File menu: slots A-H = optIdx 0-7 *)
+      IF (optIdx >= 0) AND (optIdx <= 7) THEN
         IF saveMode THEN
-          IF SaveGame(optIdx - 5) THEN END
+          IF SaveGame(optIdx) THEN END
         ELSE
-          IF LoadGame(optIdx - 5) THEN END
+          IF LoadGame(optIdx) THEN END
         END
       END;
       GoMenu(0)
@@ -810,21 +810,16 @@ END UpdateFatigue;
 (* --- Battle aftermath --- *)
 
 PROCEDURE BattleAftermath;
-VAR i, dx, dy, dead, flee: INTEGER;
+VAR i, dead, flee: INTEGER;
     numStr: ARRAY [0..7] OF CHAR;
 BEGIN
   IF actors[0].vitality < 1 THEN RETURN END;
   dead := 0; flee := 0;
-  FOR i := 1 TO actorCount - 1 DO
+  (* Original: loops i=3 to anix, counts StDead only, no proximity check *)
+  FOR i := 4 TO actorCount - 1 DO
     IF actors[i].actorType = TypeEnemy THEN
-      dx := actors[i].absX - actors[0].absX;
-      dy := actors[i].absY - actors[0].absY;
-      IF dx < 0 THEN dx := -dx END;
-      IF dy < 0 THEN dy := -dy END;
-      IF (dx < 300) AND (dy < 300) THEN
-        IF (actors[i].state = StDead) OR (actors[i].state = StDying) THEN INC(dead)
-        ELSIF actors[i].goal = GoalFlee THEN INC(flee) END
-      END
+      IF actors[i].state = StDead THEN INC(dead)
+      ELSIF actors[i].goal = GoalFlee THEN INC(flee) END
     END
   END;
   IF (actors[0].vitality < 5) AND (dead > 0) THEN ShowMessage("Bravely done!")

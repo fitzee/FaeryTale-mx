@@ -14,7 +14,9 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
   MaxTry = 10;
-  MaxEncounterActors = 8;  (* player=0, raft=1, setfig=2, carrier=3, enemies=4-7 *)
+  MaxEncounterActors = 7;  (* original anix < 7: slots 0-6 *)
+  EnemySlotStart = 4;     (* enemies in slots 4-6, skip player/raft/setfig/carrier *)
+  MaxEnemies = 3;          (* max 3 enemies at once in slots 4-6 *)
 
 TYPE
   EncounterRec = RECORD
@@ -188,17 +190,34 @@ END SetupEnemy;
 
 (* --- Find free slot --- *)
 
+PROCEDURE CountLivingEnemies(): INTEGER;
+VAR i, n: INTEGER;
+BEGIN
+  n := 0;
+  FOR i := EnemySlotStart TO MaxEncounterActors - 1 DO
+    IF (i < actorCount) AND
+       (actors[i].actorType = TypeEnemy) AND
+       (actors[i].state # StDead) THEN
+      INC(n)
+    END
+  END;
+  RETURN n
+END CountLivingEnemies;
+
 PROCEDURE FindFreeSlot(): INTEGER;
 VAR i: INTEGER;
 BEGIN
-  (* Reuse dead/dying enemy slots *)
-  FOR i := 1 TO actorCount - 1 DO
-    IF (actors[i].actorType = TypeEnemy) AND
-       ((actors[i].state = StDead) OR (actors[i].state = StDying)) THEN
+  (* Enforce max enemy count *)
+  IF CountLivingEnemies() >= MaxEnemies THEN RETURN -1 END;
+  (* Reuse dead enemy slots in range 4-6 *)
+  FOR i := EnemySlotStart TO MaxEncounterActors - 1 DO
+    IF (i < actorCount) AND
+       (actors[i].actorType = TypeEnemy) AND
+       (actors[i].state = StDead) THEN
       RETURN i
     END
   END;
-  (* Skip slots used by raft (1) and carrier (3) *)
+  (* Append if room *)
   IF actorCount < MaxEncounterActors THEN
     RETURN actorCount
   END;
@@ -405,8 +424,8 @@ BEGIN
   IF extents[ei].v2 > 0 THEN
     INC(cnt, Rand(extents[ei].v2))
   END;
-  IF cnt > MaxEncounterActors - actorCount THEN
-    cnt := MaxEncounterActors - actorCount
+  IF cnt > MaxEnemies - CountLivingEnemies() THEN
+    cnt := MaxEnemies - CountLivingEnemies()
   END;
   IF cnt < 1 THEN RETURN END;
 
