@@ -207,9 +207,12 @@ BEGIN
     RETURN
   END;
 
-  (* Override goals *)
+  (* Override goals — but egg-guarding snakes never flee *)
   IF actors[0].state = StDead THEN mode := GoalFlee END;
-  IF actors[i].vitality < 2 THEN mode := GoalFlee END;
+  IF (actors[i].vitality < 2) AND
+     (NOT (turtleEggs AND (actors[i].race = 4))) THEN
+    mode := GoalFlee
+  END;
 
   (* Shoot state machine *)
   IF actors[i].state = StShoot1 THEN

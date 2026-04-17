@@ -191,9 +191,9 @@ BEGIN
       RETURN
     END
   END;
-  (* No water found — spawn next to player anyway *)
-  actors[CarrierSlot].absX := actors[0].absX + 30;
-  actors[CarrierSlot].absY := actors[0].absY + 30;
+  (* No water found — spawn right next to player *)
+  actors[CarrierSlot].absX := actors[0].absX + 20;
+  actors[CarrierSlot].absY := actors[0].absY;
   actors[CarrierSlot].actorType := TypeCarrier;
   actors[CarrierSlot].state := StStill;
   actors[CarrierSlot].vitality := 50;
