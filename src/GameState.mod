@@ -31,7 +31,7 @@ FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
                    GetTerrainAt, GetSectorByte;
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
-                 optionCount, MItems, MBuy, MGive, MGame, GoMenu,
+                 optionCount, MItems, MBuy, MGive, MGame, MSave, MFile, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
 FROM Music IMPORT SetMood, StopMusic, ResumeMusic, IsPlaying,
                   MoodDay, MoodNight, MoodIndoor,
@@ -44,6 +44,7 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle, riding;
+FROM Quest IMPORT CheckRescue, CheckWinCondition, SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
 FROM Narration IMPORT InitPlace, UpdatePlace, Event;
 
@@ -62,6 +63,7 @@ VAR
   hunger: INTEGER;
   sleepWait: INTEGER;
   containerRng: INTEGER;
+  saveMode: BOOLEAN;  (* TRUE=saving, FALSE=loading for File menu *)
   lightTimer: INTEGER;
   freezeTimer: INTEGER;
   nameBuf: ARRAY [0..31] OF CHAR;
@@ -133,6 +135,7 @@ BEGIN
   hunger := 0;
   sleepWait := 0;
   containerRng := 31337;
+  saveMode := FALSE;
   lightTimer := 0;
   secretTimer := 0;
   freezeTimer := 0;
@@ -606,7 +609,8 @@ BEGIN
     3: HandleBuy(optIdx) |
     4: CASE optIdx OF
         5: TogglePause | 6: ToggleMusic | 7: |
-        8: running := FALSE | 9: ShowMessage("Load not implemented")
+        8: running := FALSE |
+        9: saveMode := FALSE; GoMenu(9)  (* Load → File menu *)
       ELSE END |
     6: HandleKeys(optIdx) |
     7: HandleGive(optIdx) |
@@ -635,7 +639,22 @@ BEGIN
           GoMenu(0)
       ELSE
         GoMenu(0)
-      END
+      END |
+    5: (* Save menu: Save=5, Exit=6 *)
+      IF optIdx = 5 THEN
+        saveMode := TRUE; GoMenu(9)  (* Save → File menu *)
+      ELSIF optIdx = 6 THEN
+        running := FALSE  (* Exit *)
+      ELSE GoMenu(0) END |
+    9: (* File menu: slots A-H = optIdx 0-7 mapped to 5-12 *)
+      IF (optIdx >= 5) AND (optIdx <= 12) THEN
+        IF saveMode THEN
+          IF SaveGame(optIdx - 5) THEN END
+        ELSE
+          IF LoadGame(optIdx - 5) THEN END
+        END
+      END;
+      GoMenu(0)
   ELSE END
 END HandleMenuClick;
 
@@ -1016,6 +1035,8 @@ BEGIN
     UpdateMissiles
   END;
   UpdateCarriers;
+  CheckRescue(actors[0].absX, actors[0].absY);
+  IF CheckWinCondition() THEN running := FALSE END;
   CheckDoors;
   UpdateCamera(actors[0].absX, actors[0].absY);
   prevRegion := currentRegion;
