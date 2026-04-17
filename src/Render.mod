@@ -905,11 +905,12 @@ BEGIN
   (* Carrier — turtle (32x32, 16 frames) or swan (64x64, 8 frames) *)
   IF actors[i].actorType = TypeCarrier THEN
     IF actors[i].race = 5 THEN
-      (* Turtle: 16 frames, 2 per direction (walk cycle).
-         Dirs: 0=W,1=NW,2=N,3=NE,4=E,5=SE,6=S,7=SW
-         Frames: dir*2 + (cycle MOD 2) for animation *)
+      (* Turtle: 16 frames, 2 per direction.
+         Sheet order: S,SW,W,NW,N,NE,E,SE (Amiga standard)
+         Our facing: N=0,NE=1,E=2,SE=3,S=4,SW=5,W=6,NW=7
+         Remap: our→sheet: 0→4, 1→5, 2→6, 3→7, 4→0, 5→1, 6→2, 7→3 *)
       IF turtleTex # NIL THEN
-        frame := (actors[i].facing MOD 8) * 2 + (cycle DIV 4 MOD 2);
+        frame := ((actors[i].facing + 4) MOD 8) * 2 + (cycle DIV 4 MOD 2);
         SetColorMod(turtleTex, fadeR, fadeG, fadeB);
         DrawTexRegion(turtleTex, 0, frame * 32, 32, 32,
                       sx - S(16), sy - S(16), S(32), S(32))
