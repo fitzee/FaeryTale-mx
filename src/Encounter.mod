@@ -10,7 +10,7 @@ FROM Actor IMPORT actors, actorCount, MaxActors,
 FROM Movement IMPORT ProxCheck;
 FROM Platform IMPORT GetTicks;
 FROM Assets IMPORT currentRegion, GetTerrainAt;
-FROM Carrier IMPORT turtleEggs;
+FROM Carrier IMPORT turtleEggs, turtleEggsDone;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -381,7 +381,8 @@ BEGIN
   END;
 
   (* === Forced encounters for special extents (etype >= 50) === *)
-  IF (et = 61) AND (NOT turtleEggs) AND (NOT loadPending) AND
+  IF (et = 61) AND (NOT turtleEggs) AND (NOT turtleEggsDone) AND
+     (NOT loadPending) AND
      (NOT EnemiesNearby(heroX, heroY)) AND
      (CountLivingEnemies() = 0) THEN
     (* Turtle eggs: force snake spawn *)

@@ -761,10 +761,11 @@ BEGIN
   (* Maps enemy race to enemyTex[] index.
      Original file_id: 0,1→6  2,3,5→7  4,6,7→8  8,9,10→9 *)
   CASE race OF
-    0, 1:     RETURN 0 |  (* Ogre/Orc → shape_6 *)
-    2, 3, 5:  RETURN 1 |  (* Wraith/Skeleton/Salamander → shape_7 *)
-    4, 6, 7:  RETURN 2 |  (* Snake/Spider/DKnight → shape_8 *)
-    8, 9, 10: RETURN 3    (* Loraii/Necromancer/Woodcutter → shape_9 *)
+    0, 1:    RETURN 0 |  (* Ogre/Orc → shape_6 *)
+    2, 3:    RETURN 1 |  (* Wraith/Skeleton → shape_7 *)
+    4, 5:    RETURN 4 |  (* Snake/Salamander → shape_12 *)
+    6, 7:    RETURN 2 |  (* Spider/DKnight → shape_8 *)
+    8, 9, 10: RETURN 3   (* Loraii/Necromancer/Woodcutter → shape_9 *)
   ELSE
     RETURN 0
   END

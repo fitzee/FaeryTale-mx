@@ -44,7 +44,7 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
-               TalkToCarrier, riding, turtleEggs;
+               TalkToCarrier, riding, turtleEggs, turtleEggsDone;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
                SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -839,6 +839,7 @@ BEGIN
   IF turtleEggs THEN
     SpawnTurtle;
     turtleEggs := FALSE;
+    turtleEggsDone := TRUE;
     ShowMessage("The turtle appears, grateful you saved its eggs!")
   END
 END BattleAftermath;

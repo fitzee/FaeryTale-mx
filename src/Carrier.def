@@ -13,7 +13,8 @@ CONST
 VAR
   riding: INTEGER;        (* 0=none, 1=raft, 5=turtle, 11=swan *)
   activeCarrier: INTEGER; (* carrier type loaded, 0=none *)
-  turtleEggs: BOOLEAN;    (* TRUE when in turtle egg extent, snakes spawned *)
+  turtleEggs: BOOLEAN;     (* TRUE when in turtle egg extent, snakes spawned *)
+  turtleEggsDone: BOOLEAN; (* TRUE after eggs saved — prevents re-trigger *)
 
 PROCEDURE InitCarriers;
 PROCEDURE UpdateCarriers;

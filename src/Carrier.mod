@@ -55,6 +55,7 @@ BEGIN
   activeCarrier := 0;
   raftProx := 0;
   turtleEggs := FALSE;
+  turtleEggsDone := FALSE;
 
   (* Set up raft at fixed location — slot 1 *)
   actors[RaftSlot].absX := RaftX;
