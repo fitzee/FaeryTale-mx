@@ -40,9 +40,10 @@ FROM Platform IMPORT PlayH, Scale, ScreenW;
 FROM Doors IMPORT InitDoors, CheckDoor, OpenDoorTile, RestoreDoorTiles,
                   CheckCloseDoors, UseKeyOnDoor;
 FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
-                     AddObj;
+                     AddObj, DistributeRegion, LeaveItem;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
-FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
+FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
+                      ActorsOnScreen;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
                TalkToCarrier, riding, turtleEggs, turtleEggsDone;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
@@ -172,6 +173,7 @@ BEGIN
       WriteString("*** HUD LOAD FAILED ***"); WriteLn
     END;
     SwitchRegion(3);
+    DistributeRegion(3);
     actors[0].absX := 19036;
     actors[0].absY := 15755;
     InitPlace(actors[0].absX, actors[0].absY, 3);
@@ -729,26 +731,21 @@ BEGIN
 END HandleYell;
 
 PROCEDURE CheckEnvironment;
-VAR terrain: INTEGER;
 BEGIN
-  IF currentRegion >= 0 THEN RETURN END;
-  terrain := GetTerrain(actors[0].absX, actors[0].absY);
-  IF terrain = TerrSwamp THEN
-    IF (cycle MOD 30) = 0 THEN
-      DEC(actors[0].vitality, 1);
-      IF actors[0].vitality <= 0 THEN
-        actors[0].state := StDying; ShowMessage("The swamp claims you...")
-      ELSIF (cycle MOD 90) = 0 THEN ShowMessage("The swamp drains your strength...") END
-    END
-  END;
-  (* Drowning: environ = 30 means fully submerged *)
+  (* Skip if already dying/dead — original checkdead handles transition *)
+  IF (actors[0].state = StDying) OR (actors[0].state = StDead) THEN RETURN END;
+
+  (* Original fmain.c:2444-2451 — drowning at environ 30.
+     Every 8 frames, decrement vitality. checkdead(i,6) handles death.
+     Applies in ALL regions — water is water. *)
   IF (actors[0].environ = 30) AND (BAND(CARDINAL(cycle), 7) = 0) THEN
     DEC(actors[0].vitality);
     IF actors[0].vitality <= 0 THEN
       actors[0].vitality := 0;
       actors[0].state := StDying;
       actors[0].tactic := 7;
-      DecLuck(5);
+      ShowMessage("% is drowning!")
+    ELSIF BAND(CARDINAL(cycle), 31) = 0 THEN
       ShowMessage("% is drowning!")
     END
   END
@@ -895,6 +892,7 @@ BEGIN
         actors[0].environ := 0;
         hunger := 0; fatigue := 0;
         dayNight := 8000;
+        dayPeriod := 4;  (* sync period so morning announcement doesn't fire *)
         lightTimer := 0; secretTimer := 0; freezeTimer := 0;
         actorCount := 1;  (* clear enemies *)
         deathTimer := 0;
@@ -911,7 +909,8 @@ BEGIN
           actors[0].environ := 0;
           actors[0].facing := 4;
           hunger := 0; fatigue := 0;
-          dayNight := 12000;
+          dayNight := 8000;
+          dayPeriod := 4;
           lightTimer := 0; secretTimer := 0; freezeTimer := 0;
           RestoreDoorTiles;
           SwitchRegion(3);
@@ -1069,6 +1068,9 @@ BEGIN
   UpdateCamera(actors[0].absX, actors[0].absY);
   prevRegion := currentRegion;
   CheckRegionSwitch(camX, camY);
+  IF currentRegion # prevRegion THEN
+    DistributeRegion(currentRegion)
+  END;
   UpdatePlace(actors[0].absX, actors[0].absY, currentRegion);
   MaterializeNPCs(actors[0].absX, actors[0].absY, currentRegion);
   UpdateDayNight;

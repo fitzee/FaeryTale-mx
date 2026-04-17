@@ -5,7 +5,7 @@ FROM Platform IMPORT ren, Scale, PlayW, PlayH, DrawTexRegion,
                     LoadBMPKeyedTexture;
 FROM Canvas IMPORT SetClip, ClearClip;
 FROM World IMPORT camX, camY;
-FROM Assets IMPORT currentRegion, AssetPath;
+FROM Assets IMPORT currentRegion, AssetPath, GetTerrainAt;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -27,9 +27,12 @@ BEGIN
 END AddObj;
 
 PROCEDURE InitWorldObjects;
+VAR r: INTEGER;
 BEGIN
   objCount := 0;
   objTex := NIL;
+  rng := 31337;
+  FOR r := 0 TO 9 DO distributed[r] := FALSE END;
 
   (* === Global objects (region -1) === *)
   AddObj(19316, 15747, 11, 0, -1);   (* ghost brother 1 *)
@@ -86,13 +89,17 @@ BEGIN
   (* === Region 7 — Southern Mountain === *)
   AddObj(23297,  5797, 102, 5, 7);   (* turtle eggs — not pickable *)
 
-  (* === Region 8 — Building Interiors (key items only) === *)
+  (* === Region 8 — Building Interiors === *)
   (* NPCs *)
   AddObj( 6700, 33756,  1, 3, 8);    (* priest *)
   AddObj( 5491, 33780,  5, 3, 8);    (* king *)
   AddObj( 5592, 33764,  6, 3, 8);    (* noble *)
+  AddObj( 5514, 33668,  2, 3, 8);    (* guard *)
+  AddObj( 5574, 33668,  2, 3, 8);    (* guard *)
   AddObj( 8878, 38995,  0, 3, 8);    (* wizard *)
   AddObj( 7776, 34084,  0, 3, 8);    (* wizard *)
+  AddObj( 5514, 33881,  3, 3, 8);    (* guard *)
+  AddObj( 5574, 33881,  3, 3, 8);    (* guard *)
   AddObj(10853, 35656,  4, 3, 8);    (* princess *)
   AddObj(12037, 37614,  7, 3, 8);    (* sorceress *)
   AddObj(11013, 36804,  9, 3, 8);    (* witch *)
@@ -100,8 +107,18 @@ BEGIN
   AddObj(10191, 38953,  8, 3, 8);    (* bartender *)
   AddObj(10649, 38953,  8, 3, 8);    (* bartender *)
   AddObj( 2966, 33964,  8, 3, 8);    (* bartender *)
+  (* Footstools *)
+  AddObj( 9532, 40002, 31, 1, 8);    (* footstool *)
+  AddObj( 6747, 33751, 31, 1, 8);    (* footstool *)
+  AddObj(11855, 36206, 31, 1, 8);    (* footstool *)
+  AddObj(10427, 39977, 31, 1, 8);    (* footstool *)
   (* Collectible items *)
   AddObj(11410, 36169, 155, 1, 8);   (* sunstone *)
+  AddObj( 9550, 39964, 23, 1, 8);    (* totem — cabinet *)
+  AddObj( 9552, 39964, 23, 1, 8);    (* totem — cabinet *)
+  AddObj( 9682, 39964, 23, 1, 8);    (* totem — cabinet *)
+  AddObj( 9684, 39964, 23, 1, 8);    (* totem — cabinet *)
+  AddObj( 9532, 40119, 23, 1, 8);    (* totem — on table *)
   AddObj( 9575, 39459, 14, 1, 8);    (* urn *)
   AddObj( 9590, 39459, 14, 1, 8);    (* urn *)
   AddObj( 9605, 39459, 14, 1, 8);    (* urn *)
@@ -110,13 +127,35 @@ BEGIN
   AddObj( 9784, 39453, 22, 1, 8);    (* vial *)
   AddObj( 9668, 39554, 15, 1, 8);    (* chest *)
   AddObj(11090, 39462, 13, 1, 8);    (* money *)
+  AddObj(11108, 39458, 23, 1, 8);    (* totem *)
+  AddObj(11118, 39459, 23, 1, 8);    (* totem *)
+  AddObj(11128, 39459, 23, 1, 8);    (* totem *)
+  AddObj(11138, 39458, 23, 1, 8);    (* totem *)
+  AddObj(11148, 39459, 23, 1, 8);    (* totem *)
+  AddObj(11158, 39459, 23, 1, 8);    (* totem *)
   AddObj(11909, 36198, 15, 1, 8);    (* chest *)
+  AddObj(11918, 36246, 23, 1, 8);    (* totem — cabinet *)
+  AddObj(11928, 36246, 23, 1, 8);    (* totem — cabinet *)
+  AddObj(11938, 36246, 23, 1, 8);    (* totem — cabinet *)
   AddObj(12212, 38481, 15, 1, 8);    (* chest *)
   AddObj(11652, 38481, 242, 1, 8);   (* red key *)
+  AddObj(10323, 40071, 14, 1, 8);    (* urn *)
   AddObj(10059, 38472, 16, 1, 8);    (* sacks *)
   AddObj(10344, 36171, 151, 1, 8);   (* shell *)
   AddObj(11936, 36207, 20, 1, 8);    (* scrap/note *)
   AddObj( 9674, 35687, 14, 1, 8);    (* urn *)
+  (* Food and gifts *)
+  AddObj( 5473, 38699, 147, 1, 8);   (* rose *)
+  AddObj( 7185, 34342, 148, 1, 8);   (* fruit *)
+  AddObj( 7190, 34342, 148, 1, 8);   (* fruit *)
+  AddObj( 7195, 34342, 148, 1, 8);   (* fruit *)
+  AddObj( 7185, 34347, 148, 1, 8);   (* fruit *)
+  AddObj( 7190, 34347, 148, 1, 8);   (* fruit *)
+  AddObj( 7195, 34347, 148, 1, 8);   (* fruit *)
+  AddObj( 6593, 34085, 148, 1, 8);   (* fruit *)
+  AddObj( 6598, 34085, 148, 1, 8);   (* fruit *)
+  AddObj( 6593, 34090, 148, 1, 8);   (* fruit *)
+  AddObj( 6598, 34090, 148, 1, 8);   (* fruit *)
 
   (* === Region 8 — Hidden 'look' items (ob_stat=5) === *)
   AddObj( 3872, 33546, 25, 5, 8);    (* gold key *)
@@ -133,6 +172,8 @@ BEGIN
   AddObj(10577, 38951, 22, 5, 8);    (* vial *)
   AddObj(11062, 39514, 13, 5, 8);    (* money *)
   AddObj( 8845, 39494,154, 5, 8);    (* white key *)
+  AddObj( 6542, 39494, 19, 5, 8);    (* green jewel *)
+  AddObj( 7313, 38992,242, 5, 8);    (* red key *)
 
   (* === Region 9 — Underground === *)
   AddObj( 7540, 38528, 145, 1, 9);   (* magic wand *)
@@ -160,6 +201,81 @@ BEGIN
     WriteString("World: object sprites loaded"); WriteLn
   END
 END LoadObjectSprites;
+
+(* --- Dynamic region scattering — original set_objects lines 1727-1745 ---
+   On first visit to an outdoor region, scatter 10 random treasure items.
+   Original: dstobs[region]==0 && new_region>=10 → generate items.
+   rand_treasure = {SACKS×4, CHEST, MONEY, GOLD_KEY, QUIVER,
+                    GREY_KEY×3, RED_KEY, B_TOTEM, VIAL, WHITE_KEY, CHEST} *)
+
+VAR
+  rng: INTEGER;
+  distributed: ARRAY [0..9] OF BOOLEAN;
+
+PROCEDURE BitRand(mask: INTEGER): INTEGER;
+BEGIN
+  rng := rng * 1103515245 + 12345;
+  IF rng < 0 THEN rng := -rng END;
+  RETURN BAND(CARDINAL(rng DIV 65536), CARDINAL(mask))
+END BitRand;
+
+PROCEDURE RandTreasureId(): INTEGER;
+VAR r: INTEGER;
+BEGIN
+  r := BitRand(15);
+  (* rand_treasure[16]: SACKS,SACKS,SACKS,SACKS,CHEST,MONEY,
+     GOLD_KEY,QUIVER,GREY_KEY,GREY_KEY,GREY_KEY,RED_KEY,
+     B_TOTEM,VIAL,WHITE_KEY,CHEST *)
+  IF    r = 0  THEN RETURN 16   (* sacks *)
+  ELSIF r = 1  THEN RETURN 16
+  ELSIF r = 2  THEN RETURN 16
+  ELSIF r = 3  THEN RETURN 16
+  ELSIF r = 4  THEN RETURN 15   (* chest *)
+  ELSIF r = 5  THEN RETURN 13   (* money *)
+  ELSIF r = 6  THEN RETURN 25   (* gold key *)
+  ELSIF r = 7  THEN RETURN 11   (* quiver *)
+  ELSIF r = 8  THEN RETURN 26   (* grey key *)
+  ELSIF r = 9  THEN RETURN 26
+  ELSIF r = 10 THEN RETURN 26
+  ELSIF r = 11 THEN RETURN 242  (* red key *)
+  ELSIF r = 12 THEN RETURN 23   (* bird totem *)
+  ELSIF r = 13 THEN RETURN 22   (* vial *)
+  ELSIF r = 14 THEN RETURN 154  (* white key *)
+  ELSE              RETURN 15   (* chest *)
+  END
+END RandTreasureId;
+
+PROCEDURE DistributeRegion(region: INTEGER);
+VAR i, x, y, terrain: INTEGER;
+BEGIN
+  IF (region < 0) OR (region > 9) THEN RETURN END;
+  IF distributed[region] THEN RETURN END;
+  (* Regions 8,9 (interiors/underground) are pre-distributed *)
+  IF region >= 8 THEN distributed[region] := TRUE; RETURN END;
+
+  distributed[region] := TRUE;
+  WriteString("World: distributing region "); WriteInt(region, 1); WriteLn;
+
+  FOR i := 0 TO 9 DO
+    (* Original: random coords within region bounds
+       x = bitrand(0x3FFF) + (region & 1) * 0x4000
+       y = bitrand(0x1FFF) + (region & 6) * 0x1000 *)
+    REPEAT
+      x := BitRand(16383) + BAND(CARDINAL(region), 1) * 16384;
+      y := BitRand(8191)  + BAND(CARDINAL(region), 6) * 4096;
+      terrain := GetTerrainAt(x, y)
+    UNTIL terrain = 0;  (* only on passable land *)
+    AddObj(x, y, RandTreasureId(), 1, region)
+  END
+END DistributeRegion;
+
+(* --- Leave item on ground — original leave_item, uses ob_listg[0] slot ---
+   Places a single object at given coordinates as a ground item. *)
+
+PROCEDURE LeaveItem(x, y, id: INTEGER);
+BEGIN
+  AddObj(x, y + 10, id, 1, currentRegion)
+END LeaveItem;
 
 PROCEDURE DrawWorldObjects;
 VAR i, sx, sy, sprY, ht, id: INTEGER;

@@ -8,7 +8,7 @@ DEFINITION MODULE WorldObj;
 FROM SYSTEM IMPORT ADDRESS;
 
 CONST
-  MaxWorldObjs = 200;
+  MaxWorldObjs = 300;
   MaxRegionObjs = 80;
 
   (* Object IDs matching original *)
@@ -36,6 +36,7 @@ CONST
   ObjStatue   = 149;
   ObjBook     = 150;
   ObjShell    = 151;
+  ObjFootstool = 31;
   ObjGreenKey = 153;
   ObjWhiteKey = 154;
   ObjRedKey   = 242;
@@ -49,7 +50,7 @@ TYPE
   END;
 
 VAR
-  objects: ARRAY [0..199] OF WorldObject;
+  objects: ARRAY [0..299] OF WorldObject;
   objCount: INTEGER;
   objTex: ADDRESS;  (* object sprite sheet texture *)
   revealHidden: BOOLEAN;  (* when TRUE, status=5 objects are visible/pickable *)
@@ -59,5 +60,7 @@ PROCEDURE InitWorldObjects;
 PROCEDURE LoadObjectSprites;
 PROCEDURE DrawWorldObjects;
 PROCEDURE CheckObjectPickup(heroX, heroY: INTEGER): INTEGER;
+PROCEDURE DistributeRegion(region: INTEGER);
+PROCEDURE LeaveItem(x, y, id: INTEGER);
 
 END WorldObj.

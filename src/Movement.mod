@@ -61,11 +61,12 @@ BEGIN
   IF currentRegion >= 0 THEN
     t := GetTerrainAt(x + 4, y + 2);
     IF t = 1 THEN RETURN t END;
+    (* Original prox(): non-zero terrain blocks enemies.
+       Water (4,5) blocks enemies but NOT the player.
+       Player: terrain 8,9 allowed (swamp/palace). *)
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
     IF t >= 10 THEN
       IF (actorIdx = 0) AND (t = 15) THEN
-        (* Door — open it like original doorfind, but BLOCK movement.
-           Original: proxcheck returns 15, movement fails, checkdev tries
-           alternate dirs. Door opens for next frame. *)
         OpenDoorTile(x, y);
         RETURN 15
       ELSIF (actorIdx = 0) AND (t = 12) AND
@@ -76,6 +77,7 @@ BEGIN
     END;
     t := GetTerrainAt(x - 4, y + 2);
     IF t = 1 THEN RETURN t END;
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
     IF t >= 8 THEN
       IF (actorIdx = 0) AND ((t = 8) OR (t = 9)) THEN
         (* player walks through swamp/palace *)
@@ -88,6 +90,7 @@ BEGIN
     (* Additional check at character center for top-approach *)
     t := GetTerrainAt(x, y);
     IF t = 1 THEN RETURN t END;
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
     IF t >= 10 THEN
       IF (actorIdx = 0) AND (t = 15) THEN
         OpenDoorTile(x, y);

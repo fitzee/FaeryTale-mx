@@ -21,7 +21,11 @@ PROCEDURE UpdateEncounters(heroX, heroY, region: INTEGER);
 (* Spawn a specific encounter group near the player *)
 PROCEDURE SpawnGroup(heroX, heroY, race, count, spread: INTEGER);
 
-(* TRUE if any living enemy is within 300px of hero *)
+(* TRUE if any actor (alive or dead) is within 300px of hero —
+   matches original actors_on_screen. Blocks new spawns. *)
+PROCEDURE ActorsOnScreen(heroX, heroY: INTEGER): BOOLEAN;
+
+(* TRUE if any visible living enemy is within 300px — for battleflag *)
 PROCEDURE EnemiesNearby(heroX, heroY: INTEGER): BOOLEAN;
 
 END Encounter.

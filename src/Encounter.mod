@@ -5,12 +5,12 @@ IMPLEMENTATION MODULE Encounter;
    Random encounters only in xtype < 50 regions, gated by danger roll. *)
 
 FROM Actor IMPORT actors, actorCount, MaxActors,
-                  TypeEnemy, StStill, StDead, StDying,
+                  TypeEnemy, TypeSetfig, StStill, StDead, StDying,
                   GoalAttack1, GoalAttack2, GoalArcher1, GoalArcher2;
 FROM Movement IMPORT ProxCheck;
 FROM Platform IMPORT GetTicks;
 FROM Assets IMPORT currentRegion, GetTerrainAt;
-FROM Carrier IMPORT turtleEggs, turtleEggsDone;
+FROM Carrier IMPORT turtleEggs, turtleEggsDone, activeCarrier;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -303,15 +303,35 @@ BEGIN
   RETURN MaxExtents - 1
 END FindExtent;
 
-(* --- Check if any living enemies are visible near player --- *)
+(* --- Original actors_on_screen: ANY actor within 300px, any state --- *)
+
+PROCEDURE ActorsOnScreen(heroX, heroY: INTEGER): BOOLEAN;
+VAR i, dx, dy: INTEGER;
+BEGIN
+  FOR i := 2 TO actorCount - 1 DO  (* skip hero and raft *)
+    IF (actors[i].actorType = TypeEnemy) OR
+       (actors[i].actorType = TypeSetfig) THEN
+      dx := actors[i].absX - heroX;
+      dy := actors[i].absY - heroY;
+      IF dx < 0 THEN dx := -dx END;
+      IF dy < 0 THEN dy := -dy END;
+      IF (dx < 300) AND (dy < 300) THEN
+        RETURN TRUE
+      END
+    END
+  END;
+  RETURN FALSE
+END ActorsOnScreen;
+
+(* --- Battle flag: visible living enemy within 300px --- *)
 
 PROCEDURE EnemiesNearby(heroX, heroY: INTEGER): BOOLEAN;
 VAR i, dx, dy: INTEGER;
 BEGIN
-  FOR i := 1 TO actorCount - 1 DO
+  FOR i := 2 TO actorCount - 1 DO
     IF (actors[i].actorType = TypeEnemy) AND
-       (actors[i].state # StDead) AND
-       (actors[i].state # StDying) THEN
+       (actors[i].vitality >= 1) AND
+       (actors[i].visible) THEN
       dx := actors[i].absX - heroX;
       dy := actors[i].absY - heroY;
       IF dx < 0 THEN dx := -dx END;
@@ -377,7 +397,7 @@ BEGIN
      Original: every 16 daynight ticks, if load pending and no actors visible.
      We use (cycle & 15) = 0 as the 16-tick gate. *)
   IF loadPending AND (BAND(CARDINAL(tick), 15) = 0) THEN
-    IF NOT EnemiesNearby(heroX, heroY) THEN
+    IF NOT ActorsOnScreen(heroX, heroY) THEN
       PlaceEncounter(heroX, heroY)
     END
   END;
@@ -385,7 +405,7 @@ BEGIN
   (* === Forced encounters for special extents (etype >= 50) === *)
   IF (et = 61) AND (NOT turtleEggs) AND (NOT turtleEggsDone) AND
      (NOT loadPending) AND
-     (NOT EnemiesNearby(heroX, heroY)) AND
+     (NOT ActorsOnScreen(heroX, heroY)) AND
      (CountLivingEnemies() = 0) THEN
     (* Turtle eggs: force snake spawn *)
     turtleEggs := TRUE;
@@ -409,8 +429,11 @@ BEGIN
   (* Already have a pending load *)
   IF loadPending THEN RETURN END;
 
-  (* Actors still visible — suppress *)
-  IF EnemiesNearby(heroX, heroY) THEN RETURN END;
+  (* Actors still on screen — suppress (original actors_on_screen) *)
+  IF ActorsOnScreen(heroX, heroY) THEN RETURN END;
+
+  (* No spawns while carrier active — original: !active_carrier *)
+  IF activeCarrier # 0 THEN RETURN END;
 
   (* Only ordinary random encounter regions *)
   IF et >= 50 THEN RETURN END;
