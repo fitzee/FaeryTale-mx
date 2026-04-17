@@ -1081,7 +1081,7 @@ BEGIN
   IF (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
     prevBattle := battleFlag;  (* save BEFORE updating — like original battle2 *)
     battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
-    IF battleFlag THEN aftermathDone := FALSE END;
+    IF battleFlag AND (NOT prevBattle) THEN aftermathDone := FALSE END;
     (* Battle music START — immediate when battle begins *)
     IF battleFlag AND (NOT prevBattle) THEN SetMood(MoodBattle) END;
     (* Battle END — aftermath *)
