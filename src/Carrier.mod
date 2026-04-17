@@ -13,7 +13,7 @@ FROM Brothers IMPORT brothers, activeBrother, HasStuff;
 FROM Assets IMPORT GetTerrainAt, currentRegion;
 FROM Strings IMPORT Assign;
 FROM NPC IMPORT GetSpeech;
-FROM InOut IMPORT WriteString, WriteLn;
+FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
   RaftX = 13668;  (* fixed raft spawn position *)
@@ -187,7 +187,10 @@ BEGIN
       actors[CarrierSlot].race := 5;
       activeCarrier := 5;
       IF actorCount < 4 THEN actorCount := 4 END;
-      WriteString("Carrier: turtle spawned"); WriteLn;
+      WriteString("Carrier: turtle spawned at ");
+      WriteInt(tx, 1); WriteString(","); WriteInt(ty, 1);
+      WriteString(" slot="); WriteInt(CarrierSlot, 1);
+      WriteString(" actorCount="); WriteInt(actorCount, 1); WriteLn;
       RETURN
     END
   END;

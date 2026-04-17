@@ -218,8 +218,10 @@ BEGIN
       RETURN i
     END
   END;
-  (* Append if room *)
-  IF actorCount < MaxEncounterActors THEN
+  (* Append if room — skip reserved slots 0-3 *)
+  IF actorCount < EnemySlotStart THEN
+    RETURN EnemySlotStart  (* jump to first enemy slot *)
+  ELSIF actorCount < MaxEncounterActors THEN
     RETURN actorCount
   END;
   RETURN -1
