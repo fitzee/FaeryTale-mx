@@ -340,9 +340,31 @@ BEGIN
           END;
           RETURN FALSE
         END;
-        DEC(brothers[activeBrother].stuff[15 + k])
+        DEC(brothers[activeBrother].stuff[15 + k]);
+        (* Key-opened doors: write permanently (not SaveAndSet) *)
+        SetSectorByte(x * 16, y * 32, openList[j].new1);
+        k := openList[j].new2;
+        IF k > 0 THEN
+          l := openList[j].above;
+          IF l = 1 THEN
+            SetSectorByte(x * 16, (y - 1) * 32, k)
+          ELSIF l = 3 THEN
+            SetSectorByte((x - 1) * 16, y * 32, k)
+          ELSIF l = 4 THEN
+            SetSectorByte(x * 16, (y - 1) * 32, 87);
+            SetSectorByte((x + 1) * 16, y * 32, 86);
+            SetSectorByte((x + 1) * 16, (y - 1) * 32, 88)
+          ELSE
+            SetSectorByte((x + 1) * 16, y * 32, k);
+            IF l # 2 THEN
+              SetSectorByte((x + 2) * 16, y * 32, openList[j].above)
+            END
+          END
+        END;
+        AddLogLine("It opened.");
+        RETURN TRUE
       END;
-      (* Replace sector tile bytes with open variants, saving originals *)
+      (* No-key doors: use SaveAndSet (temporary open) *)
       savedCount := 0;
       SaveAndSet(x * 16, y * 32, openList[j].new1);
       k := openList[j].new2;

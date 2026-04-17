@@ -1067,6 +1067,18 @@ BEGIN
   CheckBedTile;
   UpdateFatigue;
 
+  (* Spectre visibility: only at night (lightlevel < 40).
+     Original: ob_listg[5].ob_stat = 3 if dark, 2 if light *)
+  IF lightlevel < 40 THEN
+    IF (objCount > 2) AND (objects[2].objId = 10) THEN
+      objects[2].status := 3
+    END
+  ELSE
+    IF (objCount > 2) AND (objects[2].objId = 10) THEN
+      objects[2].status := 2
+    END
+  END;
+
   IF dayNight DIV 2000 # dayPeriod THEN
     dayPeriod := dayNight DIV 2000;
     CASE dayPeriod OF
