@@ -614,8 +614,8 @@ BEGIN
     3: HandleBuy(optIdx) |
     4: CASE optIdx OF
         5: TogglePause | 6: ToggleMusic | 7: |
-        8: running := FALSE |
-        9: saveMode := FALSE; GoMenu(9)  (* Load → File menu *)
+        8: GoMenu(5) |                      (* Quit → Save/Exit menu *)
+        9: saveMode := FALSE; GoMenu(9)    (* Load → File menu *)
       ELSE END |
     6: HandleKeys(optIdx) |
     7: HandleGive(optIdx) |

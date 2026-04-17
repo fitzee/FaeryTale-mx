@@ -83,7 +83,7 @@ BEGIN
   SetEnabled(menus[MGame], 5, 6);  (* Pause - toggle *)
   SetEnabled(menus[MGame], 6, 7);  (* Music - toggle, on *)
   SetEnabled(menus[MGame], 7, 7);  (* Sound - toggle, on *)
-  SetEnabled(menus[MGame], 8, 10); (* Quit *)
+  SetEnabled(menus[MGame], 8, 10); (* Quit → Save/Exit *)
   SetEnabled(menus[MGame], 9, 10); (* Load *)
 
   (* Buy *)
