@@ -120,9 +120,10 @@ BEGIN
   IF activeCarrier # 5 THEN RETURN END;
 
   IF riding = RideTurtle THEN
-    (* Riding turtle — follows player *)
+    (* Riding turtle — follows player, faces same direction *)
     actors[CarrierSlot].absX := actors[0].absX;
     actors[CarrierSlot].absY := actors[0].absY;
+    actors[CarrierSlot].facing := actors[0].facing;
 
     (* Check dismount — if player on land *)
     terrain := GetTerrainAt(actors[0].absX, actors[0].absY);

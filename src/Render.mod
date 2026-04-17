@@ -35,6 +35,7 @@ FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
 FROM HudFont IMPORT DrawHudStr, DrawMenuStr;
 FROM WorldObj IMPORT objTex;
 FROM NPC IMPORT GetSetfigSprite;
+FROM Carrier IMPORT riding;
 FROM HudLog IMPORT GetLine, GetStatBrv, GetStatLck, GetStatKnd,
                    GetStatWlth, GetStatVit, logDirty, statDirty;
 
@@ -400,6 +401,11 @@ PROCEDURE GetPlayerFrame(i: INTEGER): INTEGER;
 VAR base, inum, frame: INTEGER;
 BEGIN
   IF NOT wpnInited THEN InitWpnState END;
+
+  (* When riding, show static standing pose *)
+  IF (riding # 0) AND (i = 0) THEN
+    RETURN WalkBase(actors[i].facing) + 1
+  END;
 
   IF actors[i].state = StWalking THEN
     RETURN WalkBase(actors[i].facing) + ((cycle + i) MOD 8)
