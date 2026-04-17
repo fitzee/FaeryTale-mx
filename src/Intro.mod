@@ -4,20 +4,20 @@ IMPLEMENTATION MODULE Intro;
    page-flip animation, then zoom-out. Matching original FTA intro. *)
 
 FROM SYSTEM IMPORT ADDRESS;
-FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, Scale,
+FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, TextH, Scale,
                     GetTicks, DelayMs, BeginFrame, EndFrame,
                     LoadBMPTexture, PollInput, InputState, DirNone;
 FROM Texture IMPORT Tex, Draw AS TexDraw, DrawRegion AS TexDrawRegion;
 FROM Canvas IMPORT SetColor, Clear;
 FROM Assets IMPORT AssetPath;
-FROM Music IMPORT SetMood;
+FROM Music IMPORT SetMood, UpdateMusic;
 FROM GameState IMPORT FrameTime;
-FROM HudFont IMPORT DrawScreenStr, ScreenStrWidth;
+FROM HudFont IMPORT DrawScreenStr, ScreenStrWidth, SetFontColor, ResetFontColor;
 FROM Texture IMPORT SetColorMod;
 FROM InOut IMPORT WriteString, WriteLn;
 
 CONST
-  MoodIntro = 16;
+  MoodIntro = 12;  (* original: playscore(track[12]..track[15]) *)
   PageW = 320;
   PageH = 200;
 
@@ -40,6 +40,7 @@ BEGIN
   inp.attack := FALSE; inp.quit := FALSE; inp.mouseClick := FALSE;
   inp.dirKey := DirNone; inp.menuKey := 0C;
   PollInput(inp);
+  UpdateMusic;  (* pump audio during intro *)
   IF introTick < 60 THEN RETURN FALSE END;
   result := inp.attack OR (inp.menuKey # 0C) OR
             (inp.dirKey # DirNone) OR inp.quit OR
@@ -52,7 +53,7 @@ VAR sw, sh: INTEGER;
 BEGIN
   IF tex = NIL THEN RETURN END;
   sw := ScreenW * Scale;
-  sh := PlayH * Scale;
+  sh := (PlayH + TextH) * Scale;
   BeginFrame;
   SetColor(ren, 0, 0, 0, 255);
   Clear(ren);
@@ -77,7 +78,7 @@ VAR i, x, y, w, h, sw, sh: INTEGER;
 BEGIN
   IF tex = NIL THEN RETURN END;
   sw := ScreenW * Scale;
-  sh := PlayH * Scale;
+  sh := (PlayH + TextH) * Scale;
   i := 0;
   WHILE (i <= 160) AND (NOT skipped) DO
     IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
@@ -93,6 +94,7 @@ BEGIN
       TexDrawRegion(ren, tex, 0, 0, PageW, PageH, x, y, w, h)
     END;
     EndFrame;
+    UpdateMusic;
     DelayMs(FrameTime);
     INC(i, 4)
   END
@@ -104,7 +106,7 @@ VAR i, x, y, w, h, sw, sh: INTEGER;
 BEGIN
   IF tex = NIL THEN RETURN END;
   sw := ScreenW * Scale;
-  sh := PlayH * Scale;
+  sh := (PlayH + TextH) * Scale;
   i := 156;
   WHILE (i >= 0) AND (NOT skipped) DO
     IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
@@ -120,6 +122,7 @@ BEGIN
       TexDrawRegion(ren, tex, 0, 0, PageW, PageH, x, y, w, h)
     END;
     EndFrame;
+    UpdateMusic;
     DelayMs(FrameTime);
     DEC(i, 4)
   END
@@ -160,7 +163,7 @@ VAR i, sw, sh, scol, dcol, h, rate, wide: INTEGER;
 BEGIN
   IF (oldTex = NIL) OR (newTex = NIL) THEN RETURN END;
   sw := ScreenW * Scale;
-  sh := PlayH * Scale;
+  sh := (PlayH + TextH) * Scale;
 
   (* Original flip tables *)
   flip1[0]:=8; flip1[1]:=6; flip1[2]:=5; flip1[3]:=4; flip1[4]:=3;
@@ -257,6 +260,7 @@ BEGIN
     END;
 
     EndFrame;
+    UpdateMusic;
 
     IF flip3[i] > 0 THEN
       DelayMs(flip3[i] * FrameTime DIV 3)
@@ -279,10 +283,11 @@ PROCEDURE ShowCredits;
 VAR i, sw, sh, sc: INTEGER;
 BEGIN
   sw := ScreenW * Scale;
-  sh := PlayH * Scale;
+  sh := (PlayH + TextH) * Scale;
   sc := 2;  (* scale factor for text *)
 
-  (* Draw credits with fade in *)
+  (* Draw credits with white text *)
+  SetFontColor(255, 255, 255);
   FOR i := 0 TO 15 DO
     IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
     INC(introTick);
@@ -296,6 +301,7 @@ BEGIN
     CenterStr("Copyright (C) 1986 MicroIllusions", sh * 4 DIV 6, sc);
     CenterStr("Modula-2 port by Matt Fitzgerald", sh * 4 DIV 6 + 20 * sc, sc);
     EndFrame;
+    UpdateMusic;
     DelayMs(FrameTime * 3)
   END;
 
@@ -305,14 +311,16 @@ BEGIN
 
   (* Fade out — just show black *)
   FOR i := 15 TO 0 BY -1 DO
-    IF PumpAndCheck() THEN skipped := TRUE; RETURN END;
+    IF PumpAndCheck() THEN skipped := TRUE; ResetFontColor; RETURN END;
     INC(introTick);
     BeginFrame;
     SetColor(ren, 0, 0, 0, 255);
     Clear(ren);
     EndFrame;
+    UpdateMusic;
     DelayMs(FrameTime * 3)
-  END
+  END;
+  ResetFontColor
 END ShowCredits;
 
 PROCEDURE RunIntro;

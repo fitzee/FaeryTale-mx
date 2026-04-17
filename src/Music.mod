@@ -403,6 +403,7 @@ BEGIN
       IF v.volPos < EnvLen THEN
         val := ORD(volMem[v.volNum * EnvLen + v.volPos]);
         IF val < 128 THEN
+          IF val > 64 THEN val := 64 END;  (* clamp to Amiga range *)
           v.volume := val;
           INC(v.volPos)
         END
@@ -517,7 +518,7 @@ BEGIN
       s1 := GetWavSample(waveBase + idx1);
       voiceSample := s0 + (s1 - s0) * frac;
 
-      mix := mix + voiceSample * FLOAT(voices[i].volume) / 64.0;
+      mix := mix + voiceSample * FLOAT(voices[i].volume) / 256.0;
 
       voices[i].phase := voices[i].phase + phaseInc;
       WHILE voices[i].phase >= FLOAT(waveBytes) DO

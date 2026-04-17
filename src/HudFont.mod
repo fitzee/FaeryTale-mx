@@ -178,7 +178,7 @@ PROCEDURE DrawScreenStr(ren: Renderer; s: ARRAY OF CHAR;
 VAR i, cx, idx, dw, dh: INTEGER;
 BEGIN
   IF amberTex = NIL THEN RETURN END;
-  SetColorMod(amberTex, 255, 255, 255);  (* white text *)
+  (* Caller is responsible for SetColorMod on amberTex if needed *)
   cx := sx;
   dh := AmberH * sc;
   i := 0;
@@ -197,6 +197,17 @@ BEGIN
     INC(i)
   END
 END DrawScreenStr;
+
+PROCEDURE SetFontColor(r, g, b: INTEGER);
+BEGIN
+  IF amberTex # NIL THEN SetColorMod(amberTex, r, g, b) END
+END SetFontColor;
+
+PROCEDURE ResetFontColor;
+BEGIN
+  (* Original textcolors[10] = 0xA50 = dark brown *)
+  IF amberTex # NIL THEN SetColorMod(amberTex, 170, 85, 0) END
+END ResetFontColor;
 
 PROCEDURE ScreenStrWidth(s: ARRAY OF CHAR; sc: INTEGER): INTEGER;
 VAR i, w, idx: INTEGER;
