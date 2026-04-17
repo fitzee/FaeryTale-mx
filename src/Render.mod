@@ -847,8 +847,15 @@ BEGIN
   IF (i = 0) AND (brotherTex[activeBrother] # NIL) THEN
     frame := GetPlayerFrame(i);
     stateIdx := GetStateIdx(i);
-    DrawBrotherSprite(i, activeBrother, frame, sx, sy, actors[i].environ);
-    DrawWeaponOverlay(i, sx, sy, stateIdx);
+    (* When riding, offset player UP to appear on top of carrier *)
+    IF riding # 0 THEN
+      DrawBrotherSprite(i, activeBrother, frame, sx, sy - S(10), actors[i].environ)
+    ELSE
+      DrawBrotherSprite(i, activeBrother, frame, sx, sy, actors[i].environ)
+    END;
+    IF riding = 0 THEN
+      DrawWeaponOverlay(i, sx, sy, stateIdx)
+    END;
     RETURN
   END;
 
@@ -898,10 +905,11 @@ BEGIN
   (* Carrier — turtle (32x32, 16 frames) or swan (64x64, 8 frames) *)
   IF actors[i].actorType = TypeCarrier THEN
     IF actors[i].race = 5 THEN
-      (* Turtle: frame based on facing, 32x32 *)
+      (* Turtle: 16 frames, 2 per direction (walk cycle).
+         Dirs: 0=W,1=NW,2=N,3=NE,4=E,5=SE,6=S,7=SW
+         Frames: dir*2 + (cycle MOD 2) for animation *)
       IF turtleTex # NIL THEN
-        frame := (actors[i].facing MOD 8) * 2;
-        IF frame > 15 THEN frame := 0 END;
+        frame := (actors[i].facing MOD 8) * 2 + (cycle DIV 4 MOD 2);
         SetColorMod(turtleTex, fadeR, fadeG, fadeB);
         DrawTexRegion(turtleTex, 0, frame * 32, 32, 32,
                       sx - S(16), sy - S(16), S(32), S(32))
