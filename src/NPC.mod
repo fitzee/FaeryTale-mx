@@ -318,8 +318,8 @@ BEGIN
     END;
     AddWealth(-2);
     IncKind;
-    IF race = 13 THEN  (* beggar *)
-      GetSpeech(23, response)   (* "Alms! Alms for the poor!" *)
+    IF race = 13 THEN  (* beggar — prophecy based on goal *)
+      GetSpeech(24 + actors[idx].goal MOD 4, response)
     ELSE
       GetSpeech(49, response)   (* generic response *)
     END;

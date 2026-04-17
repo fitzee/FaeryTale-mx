@@ -82,13 +82,16 @@ END MakePath;
 
 PROCEDURE SaveGame(slot: INTEGER): BOOLEAN;
 VAR path: ARRAY [0..63] OF CHAR;
-    fd, n, i, v: INTEGER;
+    fd: CARDINAL;
+    n, i, v: INTEGER;
     buf: ARRAY [0..3] OF CHAR;
 BEGIN
   MakePath(slot, path);
+  WriteString("Save: writing to "); WriteString(path); WriteLn;
   OpenWrite(path, fd);
   IF fd = 0 THEN
-    WriteString("Save: cannot open "); WriteString(path); WriteLn;
+    WriteString("Save: FAILED to open "); WriteString(path); WriteLn;
+    AddLogLine("Save failed.");
     RETURN FALSE
   END;
 
@@ -131,7 +134,8 @@ END SaveGame;
 
 PROCEDURE LoadGame(slot: INTEGER): BOOLEAN;
 VAR path: ARRAY [0..63] OF CHAR;
-    fd, n, i, v: INTEGER;
+    fd: CARDINAL;
+    n, i, v: INTEGER;
     buf: ARRAY [0..3] OF CHAR;
 BEGIN
   MakePath(slot, path);

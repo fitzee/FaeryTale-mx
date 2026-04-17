@@ -14,7 +14,7 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
   MaxTry = 10;
-  MaxEncounterActors = 5;  (* original: anix < 7 but player=0, slots 1-4 = max 4 enemies *)
+  MaxEncounterActors = 8;  (* player=0, raft=1, setfig=2, carrier=3, enemies=4-7 *)
 
 TYPE
   EncounterRec = RECORD
@@ -191,9 +191,14 @@ END SetupEnemy;
 PROCEDURE FindFreeSlot(): INTEGER;
 VAR i: INTEGER;
 BEGIN
+  (* Reuse dead/dying enemy slots *)
   FOR i := 1 TO actorCount - 1 DO
-    IF actors[i].state = StDead THEN RETURN i END
+    IF (actors[i].actorType = TypeEnemy) AND
+       ((actors[i].state = StDead) OR (actors[i].state = StDying)) THEN
+      RETURN i
+    END
   END;
+  (* Skip slots used by raft (1) and carrier (3) *)
   IF actorCount < MaxEncounterActors THEN
     RETURN actorCount
   END;

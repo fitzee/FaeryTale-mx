@@ -65,6 +65,8 @@ VAR
   sleepWait: INTEGER;
   containerRng: INTEGER;
   saveMode: BOOLEAN;  (* TRUE=saving, FALSE=loading for File menu *)
+  cheatGod: BOOLEAN;   (* invincibility *)
+  cheatSpeed: BOOLEAN;  (* 5x movement speed *)
   lightTimer: INTEGER;
   freezeTimer: INTEGER;
   nameBuf: ARRAY [0..31] OF CHAR;
@@ -137,6 +139,8 @@ BEGIN
   sleepWait := 0;
   containerRng := 31337;
   saveMode := FALSE;
+  cheatGod := FALSE;
+  cheatSpeed := FALSE;
   lightTimer := 0;
   secretTimer := 0;
   freezeTimer := 0;
@@ -1018,7 +1022,15 @@ BEGIN
     END
   ELSE
     mapToggled := input.toggleMap;
-    IF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
+    IF input.menuKey = '0' THEN
+    cheatGod := NOT cheatGod;
+    IF cheatGod THEN ShowMessage("GOD MODE ON")
+    ELSE ShowMessage("GOD MODE OFF") END
+  ELSIF input.menuKey = '9' THEN
+    cheatSpeed := NOT cheatSpeed;
+    IF cheatSpeed THEN ShowMessage("SPEED MODE ON")
+    ELSE ShowMessage("SPEED MODE OFF") END
+  ELSIF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
     IF input.mouseClick THEN HandleMenuClick(input.mouseX, input.mouseY) END
   END;
   IF input.quit THEN running := FALSE; RETURN END;
@@ -1026,6 +1038,17 @@ BEGIN
     IF msgTimer > 0 THEN DEC(msgTimer) END; RETURN
   END;
   UpdatePlayer;
+  (* Cheat: god mode — keep vitality maxed *)
+  IF cheatGod AND (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
+    actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4
+  END;
+  (* Cheat: speed mode — move 4 extra times per frame *)
+  IF cheatSpeed AND (actors[0].state = StWalking) THEN
+    IF MoveActor(0, actors[0].facing, 1) THEN END;
+    IF MoveActor(0, actors[0].facing, 1) THEN END;
+    IF MoveActor(0, actors[0].facing, 1) THEN END;
+    IF MoveActor(0, actors[0].facing, 1) THEN END
+  END;
   CheckEnvironment;
   IF freezeTimer = 0 THEN
     UpdateEnemies;
