@@ -551,8 +551,8 @@ END SequencerTick;
 
 PROCEDURE UpdateMusic;
 CONST
-  MaxSamplesPerCall = 882;   (* ~20ms per call at 44100Hz *)
-  QueueTarget = 2646;        (* keep ~60ms buffered *)
+  MaxSamplesPerCall = 4410;  (* ~100ms per call at 44100Hz *)
+  QueueTarget = 8820;        (* keep ~200ms buffered *)
 VAR s, toGenerate, sampleCount: INTEGER;
     queued: CARDINAL;
     ok: BOOLEAN;
