@@ -817,10 +817,10 @@ VAR i, dead, flee: INTEGER;
 BEGIN
   IF actors[0].vitality < 1 THEN RETURN END;
   dead := 0; flee := 0;
-  (* Original: loops i=3 to anix, counts StDead only, no proximity check *)
+  (* Count dead AND dying — dying enemies are effectively defeated *)
   FOR i := 4 TO actorCount - 1 DO
     IF actors[i].actorType = TypeEnemy THEN
-      IF actors[i].state = StDead THEN INC(dead)
+      IF (actors[i].state = StDead) OR (actors[i].state = StDying) THEN INC(dead)
       ELSIF actors[i].goal = GoalFlee THEN INC(flee) END
     END
   END;
