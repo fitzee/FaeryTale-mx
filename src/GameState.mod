@@ -43,6 +43,7 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
                      AddObj;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby;
+FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle, riding;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
 FROM Narration IMPORT InitPlace, UpdatePlace, Event;
 
@@ -147,6 +148,7 @@ BEGIN
   InitHudLog;
   InitNPCs;
   InitEncounters;
+  InitCarriers;
   InitMissiles;
   InitTreasureProbs;
   InitBuyTable;
@@ -621,8 +623,8 @@ BEGIN
           GoMenu(0) |
         11: (* Shell — call turtle carrier *)
           IF HasStuff(6) THEN
+            SpawnTurtle;
             ShowMessage("The turtle hears your call!")
-            (* TODO: spawn turtle carrier *)
           ELSE ShowMessage("% doesn't have one.") END;
           GoMenu(0) |
         12: (* Key → Keys sub-menu *)
@@ -1013,6 +1015,7 @@ BEGIN
     END;
     UpdateMissiles
   END;
+  UpdateCarriers;
   CheckDoors;
   UpdateCamera(actors[0].absX, actors[0].absY);
   prevRegion := currentRegion;

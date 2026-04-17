@@ -14,7 +14,7 @@ FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
                   TerrSand, TerrSwamp, TerrBridge, TerrFloor;
 FROM Actor IMPORT actors, actorCount, StDead, StDying, StStill,
                   StWalking, StFighting, StSleep,
-                  TypeEnemy, TypeSetfig, TypeCarrier;
+                  TypeEnemy, TypeSetfig, TypeRaft, TypeCarrier;
 FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
@@ -68,7 +68,14 @@ BEGIN
   END;
   IF compassHi = NIL THEN
     WriteString("Compass: highlight load failed"); WriteLn
-  END
+  END;
+  (* Load carrier sprites *)
+  AssetPath("shape_4_Raft_32x32_x2.bmp", p);
+  raftTex := LoadBMPKeyedTexture(p, 255, 0, 255);
+  AssetPath("shape_5_Turtle_32x32_x16.bmp", p);
+  turtleTex := LoadBMPKeyedTexture(p, 255, 0, 255);
+  AssetPath("shape_11_Bird_64x64_x8.bmp", p);
+  birdTex := LoadBMPKeyedTexture(p, 255, 0, 255)
 END LoadCompass;
 
 PROCEDURE S(v: INTEGER): INTEGER;
@@ -81,6 +88,7 @@ END S;
 VAR
   fadeR, fadeG, fadeB: INTEGER;  (* cached palette fade values 0..100 *)
   compassBase, compassHi: ADDRESS;  (* compass textures *)
+  raftTex, turtleTex, birdTex: ADDRESS;  (* carrier textures *)
 
 PROCEDURE UpdateFade;
 VAR r, g, b: INTEGER;
@@ -869,6 +877,39 @@ BEGIN
       END;
       RETURN
     END
+  END;
+
+  (* Raft — 32x32 sprite, 2 frames *)
+  IF actors[i].actorType = TypeRaft THEN
+    IF raftTex # NIL THEN
+      SetColorMod(raftTex, fadeR, fadeG, fadeB);
+      DrawTexRegion(raftTex, 0, 0, 32, 32,
+                    sx - S(16), sy - S(16), S(32), S(32))
+    END;
+    RETURN
+  END;
+
+  (* Carrier — turtle (32x32, 16 frames) or swan (64x64, 8 frames) *)
+  IF actors[i].actorType = TypeCarrier THEN
+    IF actors[i].race = 5 THEN
+      (* Turtle: frame based on facing, 32x32 *)
+      IF turtleTex # NIL THEN
+        frame := (actors[i].facing MOD 8) * 2;
+        IF frame > 15 THEN frame := 0 END;
+        SetColorMod(turtleTex, fadeR, fadeG, fadeB);
+        DrawTexRegion(turtleTex, 0, frame * 32, 32, 32,
+                      sx - S(16), sy - S(16), S(32), S(32))
+      END
+    ELSIF actors[i].race = 11 THEN
+      (* Swan/Bird: frame based on facing, 64x64 *)
+      IF birdTex # NIL THEN
+        frame := actors[i].facing MOD 8;
+        SetColorMod(birdTex, fadeR, fadeG, fadeB);
+        DrawTexRegion(birdTex, 0, frame * 64, 64, 64,
+                      sx - S(32), sy - S(32), S(64), S(64))
+      END
+    END;
+    RETURN
   END;
 
   (* Fallback: colored rectangles *)

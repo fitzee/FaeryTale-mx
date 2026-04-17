@@ -1,0 +1,21 @@
+DEFINITION MODULE Carrier;
+
+(* Carrier/riding system — raft, turtle, swan.
+   Original: actor slot 1 = raft, slot 3 = carrier (turtle/swan).
+   Player mounts carriers by proximity, dismounts by stopping. *)
+
+CONST
+  RideNone  = 0;
+  RideRaft  = 1;
+  RideTurtle = 5;
+  RideSwan  = 11;
+
+VAR
+  riding: INTEGER;        (* 0=none, 1=raft, 5=turtle, 11=swan *)
+  activeCarrier: INTEGER; (* carrier type loaded, 0=none *)
+
+PROCEDURE InitCarriers;
+PROCEDURE UpdateCarriers;
+PROCEDURE SpawnTurtle;    (* called from USE→Shell *)
+
+END Carrier.

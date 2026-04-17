@@ -3,6 +3,7 @@ IMPLEMENTATION MODULE Movement;
 FROM Actor IMPORT actors, actorCount, StDead, StDying, TypeEnemy, TypeCarrier;
 FROM Brothers IMPORT brothers, activeBrother, StShard;
 FROM Doors IMPORT OpenDoorTile;
+FROM Carrier IMPORT riding, RideRaft, RideTurtle, RideSwan;
 FROM World IMPORT GetTerrain, IsPassable, TerrainSpeed;
 FROM Assets IMPORT currentRegion, IsBlocked, GetTerrainAt;
 
@@ -50,6 +51,9 @@ PROCEDURE ProxCheck(x, y, actorIdx: INTEGER): INTEGER;
 VAR
   terrain, t, j, dx, dy: INTEGER;
 BEGIN
+  (* Swan riding: skip ALL terrain collision for player *)
+  IF (actorIdx = 0) AND (riding = RideSwan) THEN RETURN 0 END;
+
   (* Wraiths (race=2) skip tile collision — they pass through walls.
      Original: proxcheck skips prox() for ENEMY type with race==2. *)
   IF NOT ((actors[actorIdx].actorType = TypeEnemy) AND
