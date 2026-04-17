@@ -615,25 +615,21 @@ BEGIN
             WeaponName(optIdx - 4, nameBuf);
             Assign("Equipped ", msgBuf); Concat(msgBuf, nameBuf, msgBuf);
             Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
-          ELSE ShowMessage("You don't have one.") END;
+          ELSE ShowMessage("% doesn't have one.") END;
           GoMenu(0) |
-        10: (* Lasso — ride golden swan *)
-          IF HasStuff(5) THEN ShowMessage("The lasso glows...")
-          ELSE ShowMessage("You don't have one.") END;
+        10: (* Lasso — no USE effect, riding happens automatically *)
           GoMenu(0) |
-        11: (* Shell — call turtle *)
-          IF HasStuff(6) THEN ShowMessage("The shell resonates...")
-          ELSE ShowMessage("You don't have one.") END;
+        11: (* Shell — call turtle carrier *)
+          IF HasStuff(6) THEN
+            ShowMessage("The turtle hears your call!")
+            (* TODO: spawn turtle carrier *)
+          ELSE ShowMessage("% doesn't have one.") END;
           GoMenu(0) |
         12: (* Key → Keys sub-menu *)
           GoMenu(6) |
-        13: (* Sun Stone *)
-          IF HasStuff(7) THEN ShowMessage("The Sun Stone blazes with light!")
-          ELSE ShowMessage("You don't have one.") END;
+        13: (* Sun Stone — only effective near witch *)
           GoMenu(0) |
-        14: (* Book *)
-          IF HasStuff(26) THEN ShowMessage("You read the ancient text...")
-          ELSE ShowMessage("You don't have one.") END;
+        14: (* Book — no USE effect *)
           GoMenu(0)
       ELSE
         GoMenu(0)
