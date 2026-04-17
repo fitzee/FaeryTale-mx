@@ -1040,7 +1040,7 @@ BEGIN
     optIdx := realOptions[j];
     IF optIdx < 0 THEN (* skip *)
     ELSE
-      selected := (menus[cmode].enabled[optIdx] AND 1) # 0;
+      selected := BAND(CARDINAL(menus[cmode].enabled[optIdx]), 1) # 0;
 
       col := j MOD 2;
       bx := PanelX + col * BtnW;

@@ -157,7 +157,7 @@ END PageDet;
    - Frames 0-10: reveal new RIGHT page by shrinking old right strips
    - Frames 11-21: reveal new LEFT page by growing new left strips *)
 PROCEDURE FlipScan(oldTex, newTex: Tex);
-VAR i, sw, sh, scol, dcol, h, rate, wide: INTEGER;
+VAR i, d, sw, sh, scol, dcol, h, rate, wide: INTEGER;
     sx, sy, sw2, sh2, dx, dy: INTEGER;
     flip1, flip2, flip3: ARRAY [0..21] OF INTEGER;
 BEGIN
@@ -260,12 +260,17 @@ BEGIN
     END;
 
     EndFrame;
-    UpdateMusic;
 
+    (* Delay in small chunks so UpdateMusic keeps audio buffer filled *)
     IF flip3[i] > 0 THEN
-      DelayMs(flip3[i] * FrameTime DIV 3)
+      d := flip3[i] * FrameTime DIV 3
     ELSE
-      DelayMs(FrameTime)
+      d := FrameTime
+    END;
+    WHILE d > 0 DO
+      IF d > 20 THEN DelayMs(20) ELSE DelayMs(d) END;
+      UpdateMusic;
+      DEC(d, 20)
     END
   END
 END FlipScan;
@@ -301,8 +306,10 @@ BEGIN
     CenterStr("Copyright (C) 1986 MicroIllusions", sh * 4 DIV 6, sc);
     CenterStr("Modula-2 port by Matt Fitzgerald", sh * 4 DIV 6 + 20 * sc, sc);
     EndFrame;
-    UpdateMusic;
-    DelayMs(FrameTime * 3)
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(FrameTime)
   END;
 
   (* Hold *)
@@ -317,8 +324,10 @@ BEGIN
     SetColor(ren, 0, 0, 0, 255);
     Clear(ren);
     EndFrame;
-    UpdateMusic;
-    DelayMs(FrameTime * 3)
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(20);
+    UpdateMusic; DelayMs(FrameTime)
   END;
   ResetFontColor
 END ShowCredits;

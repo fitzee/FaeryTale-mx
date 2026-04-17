@@ -16,6 +16,7 @@ PROCEDURE ShutdownMusic;
 PROCEDURE SetMood(mood: INTEGER);
 PROCEDURE UpdateMusic;
 PROCEDURE StopMusic;
+PROCEDURE ResumeMusic;
 PROCEDURE IsPlaying(): BOOLEAN;
 
 END Music.

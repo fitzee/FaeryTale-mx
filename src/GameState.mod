@@ -33,7 +33,7 @@ FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
                  optionCount, MItems, MBuy, MGive, MGame, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
-FROM Music IMPORT SetMood, StopMusic, IsPlaying,
+FROM Music IMPORT SetMood, StopMusic, ResumeMusic, IsPlaying,
                   MoodDay, MoodNight, MoodIndoor,
                   MoodBattle, MoodDeath;
 FROM Platform IMPORT PlayH, Scale, ScreenW;
@@ -239,7 +239,7 @@ PROCEDURE ToggleMusic;
 BEGIN
   IF BAND(CARDINAL(menus[MGame].enabled[6]), 1) = 0 THEN
     menus[MGame].enabled[6] := BOR(INTEGER(CARDINAL(menus[MGame].enabled[6])), 1);
-    SetMood(MoodDay)
+    ResumeMusic
   ELSE
     menus[MGame].enabled[6] := BAND(CARDINAL(menus[MGame].enabled[6]), 14);
     StopMusic

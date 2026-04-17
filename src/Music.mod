@@ -343,6 +343,12 @@ BEGIN
   ClearQueued(dev)
 END StopMusic;
 
+PROCEDURE ResumeMusic;
+BEGIN
+  currentMood := -1;
+  nosound := FALSE
+END ResumeMusic;
+
 PROCEDURE IsPlaying(): BOOLEAN;
 VAR i: INTEGER;
 BEGIN
