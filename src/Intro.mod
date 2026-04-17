@@ -8,9 +8,9 @@ FROM Platform IMPORT ren, ScreenW, ScreenH, PlayW, PlayH, TextH, Scale,
                     GetTicks, DelayMs, BeginFrame, EndFrame,
                     LoadBMPTexture, PollInput, InputState, DirNone;
 FROM Texture IMPORT Tex, Draw AS TexDraw, DrawRegion AS TexDrawRegion;
-FROM Canvas IMPORT SetColor, Clear;
+FROM Canvas IMPORT SetColor, FillRect, Clear;
 FROM Assets IMPORT AssetPath;
-FROM Music IMPORT SetMood, UpdateMusic;
+FROM Music IMPORT SetMood, StopMusic, UpdateMusic;
 FROM GameState IMPORT FrameTime;
 FROM HudFont IMPORT DrawScreenStr, ScreenStrWidth, SetFontColor, ResetFontColor;
 FROM Texture IMPORT SetColorMod;
@@ -100,9 +100,9 @@ BEGIN
   END
 END ZoomIn;
 
-(* Zoom out *)
+(* Zoom out with fade to black *)
 PROCEDURE ZoomOut(tex: Tex);
-VAR i, x, y, w, h, sw, sh: INTEGER;
+VAR i, x, y, w, h, sw, sh, fade: INTEGER;
 BEGIN
   IF tex = NIL THEN RETURN END;
   sw := ScreenW * Scale;
@@ -115,11 +115,17 @@ BEGIN
     h := sh * i DIV 160;
     x := (sw - w) DIV 2;
     y := (sh - h) DIV 2;
+    (* Fade: 255 at i=156, 0 at i=0 *)
+    fade := i * 255 DIV 156;
+    IF fade > 255 THEN fade := 255 END;
+    IF fade < 0 THEN fade := 0 END;
     BeginFrame;
     SetColor(ren, 0, 0, 0, 255);
     Clear(ren);
     IF (w > 0) AND (h > 0) THEN
-      TexDrawRegion(ren, tex, 0, 0, PageW, PageH, x, y, w, h)
+      SetColorMod(tex, fade, fade, fade);
+      TexDrawRegion(ren, tex, 0, 0, PageW, PageH, x, y, w, h);
+      SetColorMod(tex, 255, 255, 255)
     END;
     EndFrame;
     UpdateMusic;
@@ -332,6 +338,90 @@ BEGIN
   ResetFontColor
 END ShowCredits;
 
+PROCEDURE DrawGreekKey;
+VAR sw, sh, bx, by, bw, bh, sz, i, x, y: INTEGER;
+BEGIN
+  sw := ScreenW * Scale;
+  sh := (PlayH + TextH) * Scale;
+  sz := 24;  (* size of each greek key motif *)
+
+  SetColor(ren, 180, 0, 0, 255);
+
+  (* Top border *)
+  by := sh DIV 10;
+  FOR i := 0 TO sw DIV sz DO
+    x := i * sz;
+    FillRect(ren, x, by, sz, 3);
+    FillRect(ren, x, by, 3, sz);
+    FillRect(ren, x + 6, by + 6, sz - 6, 3);
+    FillRect(ren, x + sz - 3, by + 6, 3, sz DIV 2);
+    FillRect(ren, x + 6, by + sz DIV 2 + 3, sz - 6, 3)
+  END;
+
+  (* Bottom border *)
+  by := sh - sh DIV 10 - sz;
+  FOR i := 0 TO sw DIV sz DO
+    x := i * sz;
+    FillRect(ren, x, by + sz - 3, sz, 3);
+    FillRect(ren, x + sz - 3, by, 3, sz);
+    FillRect(ren, x, by + sz - 9, sz - 6, 3);
+    FillRect(ren, x, by + sz DIV 2 - 3, 3, sz DIV 2);
+    FillRect(ren, x, by + sz DIV 2 - 3, sz - 6, 3)
+  END;
+
+  (* Left border *)
+  bx := sw DIV 20;
+  FOR i := 0 TO sh DIV sz DO
+    y := i * sz;
+    FillRect(ren, bx, y, 3, sz);
+    FillRect(ren, bx, y, sz, 3);
+    FillRect(ren, bx + 6, y + 6, 3, sz - 6);
+    FillRect(ren, bx + 6, y + sz - 3, sz DIV 2, 3);
+    FillRect(ren, bx + sz DIV 2 + 3, y, 3, sz - 6)
+  END;
+
+  (* Right border *)
+  bx := sw - sw DIV 20 - sz;
+  FOR i := 0 TO sh DIV sz DO
+    y := i * sz;
+    FillRect(ren, bx + sz - 3, y, 3, sz);
+    FillRect(ren, bx, y + sz - 3, sz, 3);
+    FillRect(ren, bx + sz - 9, y, 3, sz - 6);
+    FillRect(ren, bx + sz DIV 2 - 3, y, sz DIV 2, 3);
+    FillRect(ren, bx + sz DIV 2 - 3, y + 6, 3, sz - 6)
+  END
+END DrawGreekKey;
+
+PROCEDURE ShowPlacard;
+VAR sh, sc, lh: INTEGER;
+BEGIN
+  IF skipped THEN RETURN END;
+
+  sh := (PlayH + TextH) * Scale;
+  sc := 2;
+  lh := 14 * sc;  (* line height *)
+
+  SetFontColor(180, 0, 0);  (* red text matching border *)
+
+  BeginFrame;
+  SetColor(ren, 0, 0, 0, 255);  (* black background *)
+  Clear(ren);
+  DrawGreekKey;
+  CenterStr('"Rescue the Talisman!"', sh DIV 6, sc);
+  CenterStr("was the Mayor's plea.", sh DIV 6 + lh, sc);
+  CenterStr('"Only the Talisman can', sh DIV 6 + lh * 3, sc);
+  CenterStr("protect our village from", sh DIV 6 + lh * 4, sc);
+  CenterStr("the evil forces of the", sh DIV 6 + lh * 5, sc);
+  CenterStr('night." And so Julian', sh DIV 6 + lh * 6, sc);
+  CenterStr("set out on his quest to", sh DIV 6 + lh * 7, sc);
+  CenterStr("recover it.", sh DIV 6 + lh * 8, sc);
+  EndFrame;
+
+  Wait(250);
+
+  ResetFontColor
+END ShowPlacard;
+
 PROCEDURE RunIntro;
 BEGIN
   skipped := FALSE;
@@ -388,6 +478,9 @@ BEGIN
 
   (* 6. Zoom out *)
   ZoomOut(spread3);
+
+  (* 7. Story placard — "Rescue the Talisman!" — music keeps playing *)
+  ShowPlacard;
 
   (* Clean up *)
   BeginFrame; SetColor(ren, 0, 0, 0, 255); Clear(ren); EndFrame

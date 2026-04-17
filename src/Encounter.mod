@@ -370,8 +370,8 @@ BEGIN
   (* Only ordinary random encounter regions *)
   IF et >= 50 THEN RETURN END;
 
-  (* Too many actors alive *)
-  IF actorCount >= MaxEncounterActors THEN RETURN END;
+  (* Too many living actors — count only alive ones *)
+  IF FindFreeSlot() < 0 THEN RETURN END;
 
   (* Danger level roll — original: rand64() <= danger_level *)
   IF region > 7 THEN

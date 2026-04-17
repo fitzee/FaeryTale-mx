@@ -608,13 +608,34 @@ BEGIN
       ELSE END |
     6: HandleKeys(optIdx) |
     7: HandleGive(optIdx) |
-    8: IF (optIdx >= 5) AND (optIdx <= 9) THEN
-        IF HasWeapon(optIdx - 4) THEN
-          actors[0].weapon := optIdx - 4;
-          WeaponName(optIdx - 4, nameBuf);
-          Assign("Equipped ", msgBuf); Concat(msgBuf, nameBuf, msgBuf);
-          Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
-        ELSE ShowMessage("You don't have one.") END;
+    8: CASE optIdx OF
+        5, 6, 7, 8, 9:  (* Dirk, Mace, Sword, Bow, Wand — equip weapon *)
+          IF HasWeapon(optIdx - 4) THEN
+            actors[0].weapon := optIdx - 4;
+            WeaponName(optIdx - 4, nameBuf);
+            Assign("Equipped ", msgBuf); Concat(msgBuf, nameBuf, msgBuf);
+            Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
+          ELSE ShowMessage("You don't have one.") END;
+          GoMenu(0) |
+        10: (* Lasso — ride golden swan *)
+          IF HasStuff(5) THEN ShowMessage("The lasso glows...")
+          ELSE ShowMessage("You don't have one.") END;
+          GoMenu(0) |
+        11: (* Shell — call turtle *)
+          IF HasStuff(6) THEN ShowMessage("The shell resonates...")
+          ELSE ShowMessage("You don't have one.") END;
+          GoMenu(0) |
+        12: (* Key → Keys sub-menu *)
+          GoMenu(6) |
+        13: (* Sun Stone *)
+          IF HasStuff(7) THEN ShowMessage("The Sun Stone blazes with light!")
+          ELSE ShowMessage("You don't have one.") END;
+          GoMenu(0) |
+        14: (* Book *)
+          IF HasStuff(26) THEN ShowMessage("You read the ancient text...")
+          ELSE ShowMessage("You don't have one.") END;
+          GoMenu(0)
+      ELSE
         GoMenu(0)
       END
   ELSE END
@@ -833,35 +854,52 @@ BEGIN
     ELSE
       fairyActive := FALSE
     END;
-    IF (deathTimer > 9000) OR ((deathTimer > 200) AND (NOT IsPlaying())) THEN
-      StopMusic;  (* ensure music stops on skip or natural end *)
-      (* Time to switch brothers *)
-      (* Place dead brother's bones at death location *)
-      AddObj(actors[0].absX, actors[0].absY, 28, 1, -1);
-      IF SwitchToNext() THEN
-        (* Reset new brother to Tambry *)
-        actors[0].absX := 19036; actors[0].absY := 15755;
+    (* Revive after fairy sequence completes — minimum 400 frames for fairy,
+       then wait for death music to finish, or skip with key press *)
+    IF (deathTimer > 9000) OR ((deathTimer > 400) AND (NOT IsPlaying())) THEN
+      StopMusic;
+      fairyActive := FALSE;
+
+      IF brothers[activeBrother].luck >= 1 THEN
+        (* SAME CHARACTER RESPAWN — luck still positive.
+           Original: revive(FALSE) — respawn at safe location,
+           restore vitality, reset hunger/fatigue. *)
         actors[0].state := StStill;
         actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
-        actors[0].weapon := 1;  (* dirk *)
         actors[0].environ := 0;
-        actors[0].facing := 4;
         hunger := 0; fatigue := 0;
-        dayNight := 12000;  (* new brother starts midday *)
+        dayNight := 8000;
         lightTimer := 0; secretTimer := 0; freezeTimer := 0;
-        fairyActive := FALSE;
-        RestoreDoorTiles;
-        SwitchRegion(3);
-        InitPlace(actors[0].absX, actors[0].absY, 3);
-        actorCount := 1;
-        Event(9);  (* "% started the journey in Tambry" *)
-        IF activeBrother = 1 THEN Event(10)   (* "as had his brother before him" *)
-        ELSIF activeBrother = 2 THEN Event(11) END;  (* "as had his brothers before him" *)
+        actorCount := 1;  (* clear enemies *)
         deathTimer := 0;
-        SetOptions
+        ShowMessage("The good fairy has revived you!")
       ELSE
-        ShowMessage("All brothers have fallen... Game Over.");
-        deathTimer := -1
+        (* BROTHER SWITCH — luck exhausted.
+           Original: revive(TRUE) — new brother at Tambry. *)
+        AddObj(actors[0].absX, actors[0].absY, 28, 1, -1);
+        IF SwitchToNext() THEN
+          actors[0].absX := 19036; actors[0].absY := 15755;
+          actors[0].state := StStill;
+          actors[0].vitality := 15 + brothers[activeBrother].brave DIV 4;
+          actors[0].weapon := 1;
+          actors[0].environ := 0;
+          actors[0].facing := 4;
+          hunger := 0; fatigue := 0;
+          dayNight := 12000;
+          lightTimer := 0; secretTimer := 0; freezeTimer := 0;
+          RestoreDoorTiles;
+          SwitchRegion(3);
+          InitPlace(actors[0].absX, actors[0].absY, 3);
+          actorCount := 1;
+          Event(9);
+          IF activeBrother = 1 THEN Event(10)
+          ELSIF activeBrother = 2 THEN Event(11) END;
+          deathTimer := 0;
+          SetOptions
+        ELSE
+          ShowMessage("All brothers have fallen... Game Over.");
+          deathTimer := -1
+        END
       END
     END;
     RETURN
