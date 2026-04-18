@@ -1157,8 +1157,28 @@ BEGIN
       bx := PanelX + col * BtnW;
       by := PanelY + (j DIV 2) * BtnH;
 
+      (* Original propt(): per-mode background colors.
+         USE=14(gray), KEYS=keycolors per key, FILE=13(light gray),
+         SAVE=optIdx, tabs(k<5)=4(blue), default=menu color *)
       IF optIdx < 5 THEN
-        penb := 4
+        penb := 4  (* tabs always blue *)
+      ELSIF cmode = MUse THEN
+        penb := 14  (* USE: medium gray *)
+      ELSIF cmode = MFile THEN
+        penb := 13  (* FILE: light gray *)
+      ELSIF cmode = MKeys THEN
+        (* keycolors[6] = {8,6,4,2,14,1} = Gold,Green,Blue,Red,Grey,White *)
+        CASE optIdx - 5 OF
+          0: penb := 8  |  (* Gold = orange *)
+          1: penb := 6  |  (* Green *)
+          2: penb := 4  |  (* Blue *)
+          3: penb := 2  |  (* Red *)
+          4: penb := 14 |  (* Grey *)
+          5: penb := 1     (* White *)
+        ELSE penb := menus[cmode].color
+        END
+      ELSIF cmode = MSave THEN
+        penb := optIdx
       ELSE
         penb := menus[cmode].color
       END;

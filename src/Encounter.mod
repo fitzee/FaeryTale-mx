@@ -189,6 +189,24 @@ BEGIN
   actors[idx].velY := 0
 END SetupEnemy;
 
+(* --- Clear enemy slots for forced encounters ---
+   Original: anix = 3 before forced spawns — wipes existing enemies.
+   We clear slots 4-6 so FindFreeSlot returns them. *)
+
+PROCEDURE ClearEnemySlots;
+VAR i: INTEGER;
+BEGIN
+  FOR i := EnemySlotStart TO MaxEncounterActors - 1 DO
+    IF i < actorCount THEN
+      actors[i].state := StDead;
+      actors[i].vitality := 0;
+      actors[i].visible := FALSE;
+      actors[i].absX := 0;
+      actors[i].absY := 0
+    END
+  END
+END ClearEnemySlots;
+
 (* --- Find free slot --- *)
 
 PROCEDURE CountLivingEnemies(): INTEGER;
@@ -418,6 +436,7 @@ BEGIN
       (* turtle eggs already handled *)
     ELSE
       IF et = 61 THEN turtleEggs := TRUE END;
+      ClearEnemySlots;
       cnt := extents[ei].v1;
       IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
       IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
@@ -433,6 +452,7 @@ BEGIN
      Original: sets encounter_type=8 and loads actors. *)
   IF (et = 52) AND (NOT ActorsOnScreen(heroX, heroY)) AND
      (CountLivingEnemies() = 0) THEN
+    ClearEnemySlots;
     cnt := extents[ei].v1;
     IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
     IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
@@ -445,6 +465,7 @@ BEGIN
      Original: xtype >= 50 && flag == 1 → force at hero pos. *)
   IF (et = 53) AND (NOT ActorsOnScreen(heroX, heroY)) AND
      (CountLivingEnemies() = 0) THEN
+    ClearEnemySlots;
     cnt := extents[ei].v1;
     IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
     IF cnt > MaxEnemies THEN cnt := MaxEnemies END;

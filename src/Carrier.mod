@@ -27,6 +27,7 @@ CONST
 
 VAR
   raftProx: INTEGER;  (* 0=far, 1=near, 2=very near *)
+  turtleTick: INTEGER;
 
 PROCEDURE Abs(x: INTEGER): INTEGER;
 BEGIN IF x < 0 THEN RETURN -x ELSE RETURN x END
@@ -54,6 +55,7 @@ BEGIN
   riding := RideNone;
   activeCarrier := 0;
   raftProx := 0;
+  turtleTick := 0;
   turtleEggs := FALSE;
   turtleEggsDone := FALSE;
 
@@ -131,12 +133,39 @@ BEGIN
       riding := RideNone
     END
   ELSE
-    (* Not riding — check proximity for mount *)
+    (* Not riding — swim toward player every 16 frames.
+       Original: set_course(i, hero_x, hero_y, 5) when (daynight & 15)==0 *)
     CheckProximity(CarrierSlot);
     IF raftProx = 2 THEN
       riding := RideTurtle;
       actors[CarrierSlot].absX := actors[0].absX;
       actors[CarrierSlot].absY := actors[0].absY
+    ELSIF raftProx = 0 THEN
+      (* Swim toward player — but only while turtle is in water.
+         If next step would leave water, stop. Turtle stays on coast. *)
+      IF actors[0].absX > actors[CarrierSlot].absX + 3 THEN
+        IF GetTerrainAt(actors[CarrierSlot].absX + 2, actors[CarrierSlot].absY) >= 3 THEN
+          INC(actors[CarrierSlot].absX, 2);
+          actors[CarrierSlot].facing := 2
+        END
+      ELSIF actors[0].absX < actors[CarrierSlot].absX - 3 THEN
+        IF GetTerrainAt(actors[CarrierSlot].absX - 2, actors[CarrierSlot].absY) >= 3 THEN
+          DEC(actors[CarrierSlot].absX, 2);
+          actors[CarrierSlot].facing := 6
+        END
+      END;
+      IF actors[0].absY > actors[CarrierSlot].absY + 3 THEN
+        IF GetTerrainAt(actors[CarrierSlot].absX, actors[CarrierSlot].absY + 2) >= 3 THEN
+          INC(actors[CarrierSlot].absY, 2);
+          actors[CarrierSlot].facing := 4
+        END
+      ELSIF actors[0].absY < actors[CarrierSlot].absY - 3 THEN
+        IF GetTerrainAt(actors[CarrierSlot].absX, actors[CarrierSlot].absY - 2) >= 3 THEN
+          DEC(actors[CarrierSlot].absY, 2);
+          actors[CarrierSlot].facing := 0
+        END
+      END;
+      actors[CarrierSlot].state := StWalking
     END
   END
 END UpdateTurtleCarrier;
@@ -195,7 +224,7 @@ BEGIN
   xdir[4] :=  2; xdir[5] :=  0; xdir[6] := -2; xdir[7] := -3;
   ydir[0] := -2; ydir[1] := -3; ydir[2] := -2; ydir[3] := 0;
   ydir[4] :=  2; ydir[5] :=  3; ydir[6] := 2; ydir[7] := 0;
-  rng := 54321;
+  rng := actors[0].absX * 31 + actors[0].absY + dragonRng;
   FOR i := 0 TO 24 DO
     rng := rng * 1103515245 + 12345;
     IF rng < 0 THEN rng := -rng END;

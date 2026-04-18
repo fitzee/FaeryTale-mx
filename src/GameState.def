@@ -4,13 +4,13 @@ DEFINITION MODULE GameState;
 
 CONST
   FrameTime = 33;  (* ~30fps matching Amiga actual game loop rate *)
-  MsgLen    = 64;
+  MsgLen    = 255;
 
 VAR
   running: BOOLEAN;
   cycle: INTEGER;
   dayNight: INTEGER;
-  msgText: ARRAY [0..63] OF CHAR;
+  msgText: ARRAY [0..255] OF CHAR;
   msgTimer: INTEGER;
 
 VAR

@@ -139,10 +139,18 @@ BEGIN
 END InitMenus;
 
 PROCEDURE BuildOptions;
-VAR i, j: INTEGER;
+VAR i, j, start: INTEGER;
 BEGIN
   j := 0;
-  FOR i := 0 TO menus[cmode].num - 1 DO
+  (* Original: sub-menus (USE, MAGIC, KEYS, GIVE, BUY, SAVE, FILE)
+     only show their own items (slots 5+), not the category tabs.
+     Main menus (ITEMS, TALK, GAME) show tabs (slots 0-4) + items. *)
+  IF (cmode = MItems) OR (cmode = MTalk) OR (cmode = MGame) THEN
+    start := 0
+  ELSE
+    start := 5
+  END;
+  FOR i := start TO menus[cmode].num - 1 DO
     IF (menus[cmode].enabled[i] # 0) AND
        (BAND(CARDINAL(menus[cmode].enabled[i]), 2) # 0) THEN
       realOptions[j] := i;

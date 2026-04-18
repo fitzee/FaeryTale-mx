@@ -188,16 +188,16 @@ BEGIN
 END InitGame;
 
 PROCEDURE ShowMessage(msg: ARRAY OF CHAR);
-VAR buf: ARRAY [0..79] OF CHAR;
+VAR buf: ARRAY [0..255] OF CHAR;
     si, di, ni: INTEGER;
     name: ARRAY [0..15] OF CHAR;
 BEGIN
   ActiveName(name);
   si := 0; di := 0;
-  WHILE (si <= HIGH(msg)) AND (msg[si] # 0C) AND (di < 79) DO
+  WHILE (si <= HIGH(msg)) AND (msg[si] # 0C) AND (di < 255) DO
     IF msg[si] = '%' THEN
       ni := 0;
-      WHILE (ni <= HIGH(name)) AND (name[ni] # 0C) AND (di < 79) DO
+      WHILE (ni <= HIGH(name)) AND (name[ni] # 0C) AND (di < 255) DO
         buf[di] := name[ni]; INC(di); INC(ni)
       END;
       INC(si)
