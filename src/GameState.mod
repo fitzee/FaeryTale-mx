@@ -34,7 +34,7 @@ FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
                  optionCount, MItems, MBuy, MGive, MGame, MSave, MFile, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
 FROM Music IMPORT SetMood, StopMusic, ResumeMusic, IsPlaying,
-                  MoodDay, MoodNight, MoodIndoor,
+                  MoodDay, MoodNight, MoodIndoor, MoodSpec, SetCaveWave,
                   MoodBattle, MoodDeath;
 FROM Doors IMPORT InitDoors, CheckDoor, OpenDoorTile, RestoreDoorTiles,
                   CheckCloseDoors, UseKeyOnDoor;
@@ -44,7 +44,8 @@ FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
                       ActorsOnScreen;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
-               TalkToCarrier, riding, turtleEggs, turtleEggsDone;
+               TalkToCarrier, riding, turtleEggs, turtleEggsDone,
+               UpdateDragon, dragonFire;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
                SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -148,6 +149,7 @@ BEGIN
   freezeTimer := 0;
   fairyActive := FALSE;
   fairyX := 0;
+  colorPlayTimer := 0;
 
   InitWorld;
   InitAll;
@@ -540,6 +542,7 @@ BEGIN
       dest := (i + actors[0].facing + 1) MOD 11;
       newX := stoneX[dest] * 256 + BAND(CARDINAL(actors[0].absX), 255);
       newY := stoneY[dest] * 256 + BAND(CARDINAL(actors[0].absY), 255);
+      colorPlayTimer := 32;  (* triggers palette cycling in render loop *)
       actors[0].absX := newX;
       actors[0].absY := newY;
       DEC(brothers[activeBrother].stuff[9]);  (* consume blue stone *)
@@ -1099,6 +1102,11 @@ BEGIN
     UpdateMissiles
   END;
   UpdateCarriers;
+  UpdateDragon;
+  IF dragonFire THEN
+    FireMissile(3);  (* CarrierSlot = 3 *)
+    dragonFire := FALSE
+  END;
   CheckRescue(actors[0].absX, actors[0].absY);
   IF CheckWinCondition() THEN ShowWinScreen; running := FALSE END;
   CheckDoors;
@@ -1149,7 +1157,16 @@ BEGIN
   IF MusicTickDue() AND
      (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
     IF NOT battleFlag THEN
-      IF currentRegion >= 8 THEN SetMood(MoodIndoor)
+      (* Original setmood: astral plane has MoodSpec (tracks 16-19),
+         region 9 (caves) and 8 (indoor) both use MoodIndoor (tracks 20-23)
+         but with different wave settings. We use MoodSpec for astral. *)
+      IF (actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
+         (actors[0].absY > 33280) AND (actors[0].absY < 35328) AND
+         (currentRegion = 9) THEN
+        SetMood(MoodSpec)
+      ELSIF currentRegion >= 8 THEN
+        SetCaveWave(currentRegion = 9);
+        SetMood(MoodIndoor)
       ELSIF lightlevel > 120 THEN SetMood(MoodDay)
       ELSE SetMood(MoodNight) END
     END

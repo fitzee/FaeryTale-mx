@@ -3,7 +3,7 @@ IMPLEMENTATION MODULE Combat;
 (* Combat system matching original FTA dohit/checkdead. *)
 
 FROM Actor IMPORT actors, actorCount,
-                  TypeEnemy, TypeSetfig,
+                  TypeEnemy, TypeSetfig, TypeDragon,
                   StFighting, StDying, StDead, StStill, StShoot1,
                   GoalDeath;
 FROM Brothers IMPORT brothers, activeBrother, StSunStone, HasStuff,
@@ -62,7 +62,8 @@ BEGIN
 
   (* Knockback: push defender 2px in attacker's facing direction.
      Original: move_figure(j,fc,2) + move_figure(i,fc,2) *)
-  IF (actors[defender].actorType # TypeSetfig) THEN
+  IF (actors[defender].actorType # TypeSetfig) AND
+     (actors[defender].actorType # TypeDragon) THEN
     kb := MoveActor(defender, actors[attacker].facing, 2);
     IF kb AND (attacker >= 0) THEN
       kb := MoveActor(attacker, actors[attacker].facing, 2)

@@ -20,6 +20,7 @@ VAR
   secretTimer: INTEGER;  (* >0 reveals hidden objects *)
   fairyActive: BOOLEAN;
   fairyX: INTEGER;  (* fairy screen X in world coords *)
+  colorPlayTimer: INTEGER;  (* >0 = color cycling effect active *)
 
 PROCEDURE InitGame;
 PROCEDURE UpdateGame;

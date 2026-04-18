@@ -14,16 +14,16 @@ FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
                   TerrSand, TerrSwamp, TerrBridge, TerrFloor;
 FROM Actor IMPORT actors, actorCount, StDead, StDying, StStill,
                   StWalking, StFighting, StSleep,
-                  TypeEnemy, TypeSetfig, TypeRaft, TypeCarrier;
+                  TypeEnemy, TypeSetfig, TypeRaft, TypeCarrier, TypeDragon;
 FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade,
-                     fairyActive, fairyX;
+                     fairyActive, fairyX, colorPlayTimer;
 FROM DayNight IMPORT brightness, isNight, lightlevel, GetFadeRGB,
                      PaletteTickDue;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
-FROM Assets IMPORT tileTex, hudTex, brotherTex, enemyTex, npcTex, shadowPB,
+FROM Assets IMPORT tileTex, hudTex, brotherTex, enemyTex, npcTex, dragonTex, shadowPB,
                    currentRegion, GetSectorByte, GetSectorByteForRegion,
                    GetMaskType, GetTilesBits, GetMapTag, DetectRegion,
                    regions, NumRegions, LoadImgCached, AssetPath;
@@ -50,6 +50,7 @@ CONST
 PROCEDURE InitOverlay;
 BEGIN
   fadeR := 255; fadeG := 255; fadeB := 255;
+  cpRng := 77777;
   wpnInited := FALSE;
   bowInited := FALSE;
   compassBase := NIL;
@@ -88,6 +89,7 @@ END S;
 
 VAR
   fadeR, fadeG, fadeB: INTEGER;  (* cached palette fade values 0..100 *)
+  cpRng: INTEGER;  (* RNG for colorplay effect *)
   compassBase, compassHi: ADDRESS;  (* compass textures *)
   raftTex, turtleTex, birdTex: ADDRESS;  (* carrier textures *)
 
@@ -108,14 +110,26 @@ VAR imx, imy, sx, sy, secByte, imgIdx, tileY, tileReg: INTEGER;
     startIX, startIY, endIX, endIY: INTEGER;
     tex: ADDRESS;
 BEGIN
-  (* Update palette fade — indoor regions are always full bright,
-     outdoor regions update on palette tick.
-     Force immediate update when transitioning outdoor to avoid flash. *)
-  IF currentRegion >= 8 THEN
+  (* Original colorplay(): randomize palette for teleport effect.
+     When active, override fade with random 12-bit Amiga colors. *)
+  IF colorPlayTimer > 0 THEN
+    cpRng := cpRng * 1103515245 + 12345;
+    IF cpRng < 0 THEN cpRng := -cpRng END;
+    fadeR := ((cpRng DIV 256) MOD 16) * 17;   (* 0-15 → 0-255 *)
+    cpRng := cpRng * 1103515245 + 12345;
+    IF cpRng < 0 THEN cpRng := -cpRng END;
+    fadeG := ((cpRng DIV 256) MOD 16) * 17;
+    cpRng := cpRng * 1103515245 + 12345;
+    IF cpRng < 0 THEN cpRng := -cpRng END;
+    fadeB := ((cpRng DIV 256) MOD 16) * 17;
+    DEC(colorPlayTimer);
+    (* Update palette fade — indoor regions are always full bright,
+       outdoor regions update on palette tick.
+       Force immediate update when transitioning outdoor to avoid flash. *)
+  ELSIF currentRegion >= 8 THEN
     fadeR := 255; fadeG := 255; fadeB := 255
   ELSE
     IF (fadeR = 255) AND (fadeG = 255) AND (fadeB = 255) THEN
-      (* Just came from indoor — force immediate palette update *)
       UpdateFade
     ELSIF PaletteTickDue() THEN
       UpdateFade
@@ -910,6 +924,20 @@ BEGIN
       END;
       RETURN
     END
+  END;
+
+  (* Dragon — 48x40 sprite, 5 frames: 0-2=anim, 3=dying, 4=dead *)
+  IF actors[i].actorType = TypeDragon THEN
+    IF dragonTex # NIL THEN
+      IF actors[i].state = StDead THEN frame := 4
+      ELSIF actors[i].state = StDying THEN frame := 3
+      ELSE frame := (cycle DIV 8) MOD 3
+      END;
+      SetColorMod(dragonTex, fadeR, fadeG, fadeB);
+      DrawTexRegion(dragonTex, 0, frame * 40, 48, 40,
+                    sx - S(24), sy - S(20), S(48), S(40))
+    END;
+    RETURN
   END;
 
   (* Raft — 32x32 sprite, 2 frames *)

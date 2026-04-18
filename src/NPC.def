@@ -6,7 +6,7 @@ DEFINITION MODULE NPC;
 
 CONST
   MaxNPCs    = 14;  (* setfig table size *)
-  MaxSpeeches = 60;
+  MaxSpeeches = 64;
 
 (* Get sprite bank and frame for a setfig race *)
 PROCEDURE GetSetfigSprite(race: INTEGER; VAR bank, frame: INTEGER);

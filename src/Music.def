@@ -18,5 +18,6 @@ PROCEDURE UpdateMusic;
 PROCEDURE StopMusic;
 PROCEDURE ResumeMusic;
 PROCEDURE IsPlaying(): BOOLEAN;
+PROCEDURE SetCaveWave(cave: BOOLEAN);
 
 END Music.

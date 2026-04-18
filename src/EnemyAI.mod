@@ -7,7 +7,7 @@ IMPLEMENTATION MODULE EnemyAI;
    These are NOT the same thing. *)
 
 FROM Actor IMPORT actors, actorCount,
-                  TypeEnemy, TypeSetfig, TypeCarrier,
+                  TypeEnemy, TypeSetfig, TypeCarrier, TypeDragon,
                   StWalking, StStill, StDead, StDying,
                   StFighting, StShoot1, StShoot3,
                   GoalAttack1, GoalAttack2, GoalArcher1, GoalArcher2,
@@ -194,6 +194,7 @@ BEGIN
 
   IF actors[i].actorType = TypeSetfig THEN RETURN END;
   IF actors[i].actorType = TypeCarrier THEN RETURN END;
+  IF actors[i].actorType = TypeDragon THEN RETURN END;
   IF actors[i].vitality < 1 THEN RETURN END;
 
   mode := actors[i].goal;

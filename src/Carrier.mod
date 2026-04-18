@@ -6,8 +6,8 @@ IMPLEMENTATION MODULE Carrier;
    Swan: spawned in extent 0, slot 3, needs lasso, flies anywhere. *)
 
 FROM Actor IMPORT actors, actorCount,
-                  TypeRaft, TypeCarrier,
-                  StStill, StWalking;
+                  TypeRaft, TypeCarrier, TypeDragon,
+                  StStill, StWalking, StDead, StDying;
 FROM World IMPORT camX, camY;
 FROM Brothers IMPORT brothers, activeBrother, HasStuff;
 FROM Assets IMPORT GetTerrainAt, currentRegion;
@@ -253,4 +253,75 @@ BEGIN
   END
 END UpdateCarriers;
 
+(* --- Dragon --- *)
+
+VAR
+  dragonSpawned: BOOLEAN;
+  dragonRng: INTEGER;
+
+PROCEDURE SpawnDragon;
+BEGIN
+  IF dragonSpawned THEN RETURN END;
+  (* Original: spawns at extent center + offset (6999, 35151) *)
+  actors[CarrierSlot].absX := 6999;
+  actors[CarrierSlot].absY := 35151;
+  actors[CarrierSlot].actorType := TypeDragon;
+  actors[CarrierSlot].state := StStill;
+  actors[CarrierSlot].vitality := 50;
+  actors[CarrierSlot].weapon := 5;  (* wand-type = fire breath missile *)
+  actors[CarrierSlot].environ := 0;
+  actors[CarrierSlot].visible := TRUE;
+  actors[CarrierSlot].race := 10;
+  actors[CarrierSlot].facing := 5;
+  IF actorCount < 4 THEN actorCount := 4 END;
+  dragonSpawned := TRUE;
+  WriteString("Dragon spawned"); WriteLn
+END SpawnDragon;
+
+PROCEDURE UpdateDragon;
+VAR dx, dy: INTEGER;
+BEGIN
+  IF NOT dragonSpawned THEN RETURN END;
+  IF actors[CarrierSlot].actorType # TypeDragon THEN RETURN END;
+  IF actors[CarrierSlot].state = StDead THEN RETURN END;
+  IF actors[CarrierSlot].state = StDying THEN
+    DEC(actors[CarrierSlot].tactic);
+    IF actors[CarrierSlot].tactic <= 0 THEN
+      actors[CarrierSlot].state := StDead
+    END;
+    RETURN
+  END;
+  IF actors[CarrierSlot].vitality < 1 THEN
+    actors[CarrierSlot].state := StDying;
+    actors[CarrierSlot].tactic := 30;
+    RETURN
+  END;
+
+  (* Face the player *)
+  dx := actors[0].absX - actors[CarrierSlot].absX;
+  dy := actors[0].absY - actors[CarrierSlot].absY;
+  IF Abs(dx) > Abs(dy) THEN
+    IF dx > 0 THEN actors[CarrierSlot].facing := 2
+    ELSE actors[CarrierSlot].facing := 6 END
+  ELSE
+    IF dy > 0 THEN actors[CarrierSlot].facing := 4
+    ELSE actors[CarrierSlot].facing := 0 END
+  END;
+
+  (* Fire breath: 25% chance per frame — original: rand4() == 0.
+     Set flag for GameState to call FireMissile (avoids import cycle). *)
+  dragonFire := FALSE;
+  dragonRng := dragonRng * 1103515245 + 12345;
+  IF dragonRng < 0 THEN dragonRng := -dragonRng END;
+  IF (dragonRng DIV 65536) MOD 4 = 0 THEN
+    IF (Abs(dx) < 200) AND (Abs(dy) < 200) THEN
+      dragonFire := TRUE
+    END
+  END
+END UpdateDragon;
+
+BEGIN
+  dragonSpawned := FALSE;
+  dragonFire := FALSE;
+  dragonRng := 31337
 END Carrier.

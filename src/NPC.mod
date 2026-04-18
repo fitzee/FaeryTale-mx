@@ -31,7 +31,7 @@ VAR
   rng: INTEGER;
 
   (* Speech table — transcribed from original narr.c speeches[] *)
-  speeches: ARRAY [0..59] OF ARRAY [0..127] OF CHAR;
+  speeches: ARRAY [0..63] OF ARRAY [0..255] OF CHAR;
 
 (* --- Setfig table init --- *)
 
@@ -68,65 +68,68 @@ END GetSetfigSprite;
 
 PROCEDURE InitSpeeches;
 BEGIN
-  Assign("% tried to talk but got only a snarl.", speeches[0]);
-  Assign("Human must die! said the goblin-man.", speeches[1]);
-  Assign("Doom! wailed the wraith.", speeches[2]);
+  (* Exact text from original narr.c speeches[] *)
+  Assign("% attempted to communicate with the Ogre but a guttural snarl was the only response.", speeches[0]);
+  Assign('"Human must die!" said the goblin-man.', speeches[1]);
+  Assign('"Doom!" wailed the wraith.', speeches[2]);
   Assign("A clattering of bones was the only reply.", speeches[3]);
-  Assign("% knew it is a waste of time to talk to a snake.", speeches[4]);
+  Assign("% knew that it is a waste of time to talk to a snake.", speeches[4]);
   Assign("...", speeches[5]);
   Assign("There was no reply.", speeches[6]);
-  Assign("Die, foolish mortal! he said.", speeches[7]);
-  Assign("No need to shout, son! he said.", speeches[8]);
-  Assign("Nice weather we're having, isn't it?", speeches[9]);
-  Assign("Good luck, sonny! Hope you win!", speeches[10]);
-  Assign("If you need to cross the lake, there's a raft north of here.", speeches[11]);
-  Assign('"Would you like to buy something?" said the tavern keeper.', speeches[12]);
-  Assign('"Good Morning. Hope you slept well."', speeches[13]);
+  Assign('"Die, foolish mortal!" he said.', speeches[7]);
+  Assign('"No need to shout, son!" he said.', speeches[8]);
+  Assign("Nice weather we're having, isn't it? queried the ranger.", speeches[9]);
+  Assign('"Good luck, sonny!" said the ranger. "Hope you win!"', speeches[10]);
+  Assign('"If you need to cross the lake" said the ranger, "There is a raft just north of here."', speeches[11]);
+  Assign('"Would you like to buy something?" said the tavern keeper. "Or do you just need lodging for the night?"', speeches[12]);
+  Assign('"Good Morning." said the tavern keeper. "Hope you slept well."', speeches[13]);
   Assign('"Have a drink!" said the tavern keeper.', speeches[14]);
-  Assign('"State your business!" said the guard.', speeches[15]);
-  Assign('"Please, sir, rescue me!" pleaded the princess.', speeches[16]);
-  Assign('"I cannot help you. My armies are decimated."', speeches[17]);
-  Assign("Here is a writ designating you as my official agent.", speeches[18]);
-  Assign("I already gave the golden statue to another.", speeches[19]);
-  Assign("If you could rescue the princess, the King's courage would be restored.", speeches[20]);
-  Assign("Sorry, I have no use for it.", speeches[21]);
-  Assign("The dragon's cave is directly north of here.", speeches[22]);
+  Assign('"State your business!" said the guard. "My business is with the king." stated %, respectfully.', speeches[15]);
+  Assign('"Please, sir, rescue me from this horrible prison!" pleaded the princess.', speeches[16]);
+  Assign('"I cannot help you, young man." said the king. "My armies are decimated, and I fear that with the loss of my children, I have lost all hope."', speeches[17]);
+  Assign('"Here is a writ designating you as my official agent. Be sure and show this to the Priest before you leave Marheim."', speeches[18]);
+  Assign('"I am afraid I cannot help you, young man. I already gave the golden statue to the other young man."', speeches[19]);
+  Assign("If you could rescue the king's daughter, said Lord Trane, The King's courage would be restored.", speeches[20]);
+  Assign('"Sorry, I have no use for it."', speeches[21]);
+  Assign("The dragon's cave is directly north of here. said the ranger.", speeches[22]);
   Assign('"Alms! Alms for the poor!"', speeches[23]);
-  Assign('"I have a prophecy for you, lord."', speeches[24]);
-  Assign("Lovely Jewels, glint in the night!", speeches[25]);
-  Assign("Where is the hidden city? How can you find what you cannot see?", speeches[26]);
+  Assign("I have a prophecy for you, m'lord. said the beggar. You must seek two women, one Good, one Evil.", speeches[24]);
+  Assign('"Lovely Jewels, glint in the night - give to us the gift of Sight!" he said.', speeches[25]);
+  Assign('"Where is the hidden city? How can you find it when you cannot even see it?" said the beggar.', speeches[26]);
   Assign('"Kind deeds could gain thee a friend from the sea."', speeches[27]);
-  Assign('"Seek the place darker than night!" said the wizard.', speeches[28]);
-  Assign('"A crystal Orb can help find things concealed."', speeches[29]);
-  Assign('"The Witch lives in Grimwood. Her gaze is Death!"', speeches[30]);
-  Assign('"Only the light of the Sun can destroy the Evil."', speeches[31]);
-  Assign('"The maiden lies imprisoned in an unreachable castle."', speeches[32]);
-  Assign('"Tame the golden beast! But what rope could hold it?"', speeches[33]);
+  Assign('"Seek the place that is darker than night - There you shall find your goal in sight!" said the wizard, cryptically.', speeches[28]);
+  Assign('"Like the eye itself, a crystal Orb can help to find things concealed."', speeches[29]);
+  Assign('"The Witch lives in the dim forest of Grimwood, where the very trees are warped to her will. Her gaze is Death!"', speeches[30]);
+  Assign("Only the light of the Sun can destroy the Witch's Evil.", speeches[31]);
+  Assign('"The maiden you seek lies imprisoned in an unreachable castle surrounded by unclimbable mountains."', speeches[32]);
+  Assign('"Tame the golden beast and no mountain may deny you! But what rope could hold such a creature?"', speeches[33]);
   Assign('"Just what I needed!" he said.', speeches[34]);
-  Assign('"Away with you, young ruffian!" said the Wizard.', speeches[35]);
-  Assign('"Seek your enemy on the spirit plane."', speeches[36]);
-  Assign('"Seek the power of the Stones." he said.', speeches[37]);
-  Assign('"I shall Heal all your wounds." % felt better.', speeches[38]);
-  Assign('"Here is one of the golden statues."', speeches[39]);
-  Assign('"Repent, Sinner!"', speeches[40]);
-  Assign('"None may enter the sacred shrine!"', speeches[41]);
-  Assign('"You have earned the right to claim the prize."', speeches[42]);
-  Assign('"Simply Pathetic!" said the Necromancer.', speeches[43]);
-  Assign("The Necromancer was transformed into a normal man.", speeches[44]);
-  Assign('"Welcome. Here is a golden figurine you need."', speeches[45]);
-  Assign('"Look into my eyes and Die!!" hissed the witch.', speeches[46]);
-  Assign('"Bring me bones of the ancient King."', speeches[47]);
-  Assign("% gave him the ancient bones.", speeches[48]);
-  Assign("Well met, traveler.", speeches[49]);
-  Assign("% gave him some gold coins. Thank you, young sir!", speeches[50]);
-  Assign("Sorry, but I have nothing to sell.", speeches[51]);
-  (* 52 is empty *)
+  Assign('"Away with you, young ruffian!" said the Wizard. "Perhaps you can find some small animal to torment if that pleases you!"', speeches[35]);
+  Assign('"You must seek your enemy on the spirit plane. It is hazardous in the extreme. Space may twist, and time itself may run backwards!"', speeches[36]);
+  Assign('"When you wish to travel quickly, seek the power of the Stones." he said.', speeches[37]);
+  Assign('"Since you are brave of heart, I shall Heal all your wounds." Instantly % felt much better.', speeches[38]);
+  Assign("Ah! You have a writ from the king. Here is one of the golden statues of Azal-Car-Ithil. Find all five and you'll find the vanishing city.", speeches[39]);
+  Assign('"Repent, Sinner! Thou art an uncouth brute and I have no interest in your conversation!"', speeches[40]);
+  Assign('"Ho there, young traveler!" said the black figure. "None may enter the sacred shrine of the People who came Before!"', speeches[41]);
+  Assign('"Your prowess in battle is great." said the Knight of Dreams. "You have earned the right to enter and claim the prize."', speeches[42]);
+  Assign('"So this is the so-called Hero who has been sent to hinder my plans. Simply Pathetic. Well, try this, young Fool!"', speeches[43]);
+  Assign("% gasped. The Necromancer had been transformed into a normal man. All of his evil was gone.", speeches[44]);
+  Assign('"Welcome. Here is one of the five golden figurines you will need." "Thank you." said %.', speeches[45]);
+  Assign('"Look into my eyes and Die!!" hissed the witch. "Not a chance!" replied %', speeches[46]);
+  Assign("The Spectre spoke. HE has usurped my place as lord of undead. Bring me bones of the ancient King and I'll help you destroy him.", speeches[47]);
+  Assign('% gave him the ancient bones. "Good! That spirit now rests quietly in my halls. Take this crystal shard."', speeches[48]);
+  Assign('"%..." said the apparition. "I am the ghost of your dead brother. Find my bones -- there you will find some things you need.', speeches[49]);
+  Assign('% gave him some gold coins. "Why, thank you, young sir!"', speeches[50]);
+  Assign('"Sorry, but I have nothing to sell."', speeches[51]);
   speeches[52][0] := 0C;
-  Assign("The dragon's cave is east of here.", speeches[53]);
-  Assign("The dragon's cave is west of here.", speeches[54]);
-  Assign("The dragon's cave is south of here.", speeches[55]);
-  Assign("Take this seashell as a token of my gratitude.", speeches[56]);
-  Assign("Just hop on my back if you need a ride.", speeches[57])
+  Assign("The dragon's cave is east of here. said the ranger.", speeches[53]);
+  Assign("The dragon's cave is west of here. said the ranger.", speeches[54]);
+  Assign("The dragon's cave is south of here. said the ranger.", speeches[55]);
+  Assign('"Oh, thank you for saving my eggs, kind man!" said the turtle. "Take this seashell as a token of my gratitude."', speeches[56]);
+  Assign('"Just hop on my back if you need a ride somewhere." said the turtle.', speeches[57]);
+  Assign("Stupid fool, you can't hurt me with that!", speeches[58]);
+  Assign("Your magic won't work here, fool!", speeches[59]);
+  Assign("The Sunstone has made the witch vulnerable!", speeches[60])
 END InitSpeeches;
 
 (* --- Materialization --- *)

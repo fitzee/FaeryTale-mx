@@ -293,7 +293,15 @@ BEGIN
       sy := (objects[i].y - camY) * Scale;
       IF (sx > -S(20)) AND (sx < S(PlayW) + 20) AND
          (sy > -S(20)) AND (sy < S(PlayH) + 20) THEN
-        sprY := objects[i].objId * ObjSprH;
+        (* Original: objects with ID >= 128 use (id & 0x7F) for sprite frame
+           and render from the bottom half (+8 offset, 8px tall).
+           Same frame is shared — top half is one object, bottom half another. *)
+        IF BAND(CARDINAL(objects[i].objId), 128) # 0 THEN
+          sprY := INTEGER(BAND(CARDINAL(objects[i].objId), 127)) * ObjSprH + 8;
+          ht := 8
+        ELSE
+          sprY := objects[i].objId * ObjSprH
+        END;
         (* Original: certain objects render at half height (8px).
            if inum==27 || (inum>=8 && inum<=12) || inum==25 || inum==26 ||
               (inum>16 && inum<24) || (inum & 128)  → ysize=8 *)
@@ -305,10 +313,12 @@ BEGIN
            (BAND(CARDINAL(id), 128) # 0) THEN
           ht := 8
         END;
-        DrawTexRegion(objTex,
-                      0, sprY, ObjSprW, ht,
-                      sx - S(8), sy - S(ht DIV 2),
-                      S(ObjSprW), S(ht))
+        IF sprY + ht <= 1856 THEN
+          DrawTexRegion(objTex,
+                        0, sprY, ObjSprW, ht,
+                        sx - S(8), sy - S(ht DIV 2),
+                        S(ObjSprW), S(ht))
+        END
       END
     END
   END;

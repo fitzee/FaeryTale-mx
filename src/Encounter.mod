@@ -10,7 +10,7 @@ FROM Actor IMPORT actors, actorCount, MaxActors,
 FROM Movement IMPORT ProxCheck;
 FROM Platform IMPORT GetTicks;
 FROM Assets IMPORT currentRegion, GetTerrainAt;
-FROM Carrier IMPORT turtleEggs, turtleEggsDone, activeCarrier;
+FROM Carrier IMPORT turtleEggs, turtleEggsDone, activeCarrier, SpawnDragon;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 CONST
@@ -388,6 +388,15 @@ BEGIN
   (* Peace zones — no spawning *)
   IF et >= 80 THEN RETURN END;
 
+  (* etype 70 with v3=10: dragon cave — spawn dragon *)
+  IF (et = 70) AND (extents[ei].v3 = 10) THEN
+    SpawnDragon;
+    RETURN
+  END;
+
+  (* Other etype 70: carrier zones (swan/turtle) — handled by Carrier.mod *)
+  IF et >= 70 THEN RETURN END;
+
   (* === PHASE 2: Place pending encounter ===
      Original: every 16 daynight ticks, if load pending and no actors visible.
      We use (cycle & 15) = 0 as the 16-tick gate. *)
@@ -398,19 +407,49 @@ BEGIN
   END;
 
   (* === Forced encounters for special extents (etype >= 50) === *)
-  (* Original: xtype 60/61 force-spawns immediately, no actors_on_screen gate.
-     Condition: slot 3 doesn't have the right race yet, or actorCount < 4. *)
-  IF (et = 61) AND (NOT turtleEggs) AND (NOT turtleEggsDone) AND
+  (* These only trigger on FIRST entry to the extent (xtype changed).
+     Original: xtype != extn->etype gates all forced spawns. *)
+
+  (* etype 60/61: force-spawn at extent center.
+     61 = turtle eggs (snakes), 60 = necromancer/dark knight *)
+  IF ((et = 60) OR (et = 61)) AND
      ((actorCount < 4) OR (actors[3].race # extents[ei].v3)) THEN
-    turtleEggs := TRUE;
+    IF (et = 61) AND (turtleEggs OR turtleEggsDone) THEN
+      (* turtle eggs already handled *)
+    ELSE
+      IF et = 61 THEN turtleEggs := TRUE END;
+      cnt := extents[ei].v1;
+      IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
+      IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
+      IF cnt < 1 THEN cnt := 1 END;
+      SpawnGroup((extents[ei].x1 + extents[ei].x2) DIV 2,
+                 (extents[ei].y1 + extents[ei].y2) DIV 2,
+                 extents[ei].v3, cnt, 63);
+      RETURN
+    END
+  END;
+
+  (* etype 52: Loraii / astral plane — force Loraii (race 8) spawn.
+     Original: sets encounter_type=8 and loads actors. *)
+  IF (et = 52) AND (NOT ActorsOnScreen(heroX, heroY)) AND
+     (CountLivingEnemies() = 0) THEN
     cnt := extents[ei].v1;
     IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
     IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
     IF cnt < 1 THEN cnt := 1 END;
-    (* Force immediate spawn around extent center *)
-    SpawnGroup((extents[ei].x1 + extents[ei].x2) DIV 2,
-               (extents[ei].y1 + extents[ei].y2) DIV 2,
-               extents[ei].v3, cnt, 63);
+    SpawnGroup(heroX, heroY, 8, cnt, 63);
+    RETURN
+  END;
+
+  (* etype 53: Spider pit — force spawn at player position.
+     Original: xtype >= 50 && flag == 1 → force at hero pos. *)
+  IF (et = 53) AND (NOT ActorsOnScreen(heroX, heroY)) AND
+     (CountLivingEnemies() = 0) THEN
+    cnt := extents[ei].v1;
+    IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
+    IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
+    IF cnt < 1 THEN cnt := 1 END;
+    SpawnGroup(heroX, heroY, extents[ei].v3, cnt, 63);
     RETURN
   END;
 

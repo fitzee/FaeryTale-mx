@@ -602,4 +602,15 @@ BEGIN
   END
 END UpdateMusic;
 
+(* Original: new_wave[10] = 0x0307 for region 9 caves, 0x0100 for region 8 indoor.
+   Changes instrument waveform for voice 10, giving a darker tone in caves. *)
+PROCEDURE SetCaveWave(cave: BOOLEAN);
+BEGIN
+  IF cave THEN
+    insMap[10] := 775   (* 0x0307: waveNum=3, volNum=7 *)
+  ELSE
+    insMap[10] := 256   (* 0x0100: waveNum=1, volNum=0 *)
+  END
+END SetCaveWave;
+
 END Music.

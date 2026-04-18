@@ -107,6 +107,7 @@ BEGIN
   FOR i := 0 TO 2 DO brotherTex[i] := NIL END;
   FOR i := 0 TO 4 DO enemyTex[i] := NIL END;
   FOR i := 0 TO 4 DO npcTex[i] := NIL END;
+  dragonTex := NIL;
   IF m2sys_file_exists(ADR("assets/hiscreen.bmp")) = 1 THEN
     Assign("assets/", basePath)
   ELSIF m2sys_file_exists(ADR("../../assets/hiscreen.bmp")) = 1 THEN
@@ -334,6 +335,13 @@ BEGIN
   npcTex[4] := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
   IF npcTex[0] # NIL THEN
     WriteString("NPC sprites loaded"); WriteLn
+  END;
+
+  (* Dragon sprite: 48x40 × 5 frames *)
+  AssetPath("shape_10_Dragon_48x40_x5.bmp", pathBuf);
+  dragonTex := LoadBMPKeyedTexture(pathBuf, 255, 0, 255);
+  IF dragonTex # NIL THEN
+    WriteString("Dragon sprite loaded"); WriteLn
   END;
 
   WriteString("Done: "); WriteInt(cachedCount, 1);

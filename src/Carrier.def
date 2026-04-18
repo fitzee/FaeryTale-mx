@@ -20,5 +20,10 @@ PROCEDURE InitCarriers;
 PROCEDURE UpdateCarriers;
 PROCEDURE SpawnTurtle;    (* called from USE→Shell or aftermath *)
 PROCEDURE TalkToCarrier(VAR speech: ARRAY OF CHAR): BOOLEAN;
+PROCEDURE SpawnDragon;    (* called when entering dragon cave extent *)
+PROCEDURE UpdateDragon;   (* dragon AI — sets dragonFire flag *)
+
+VAR
+  dragonFire: BOOLEAN;    (* TRUE = dragon wants to fire this frame *)
 
 END Carrier.
