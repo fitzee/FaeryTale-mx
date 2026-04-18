@@ -64,7 +64,8 @@ BEGIN
     (* Original prox(): non-zero terrain blocks enemies.
        Water (4,5) blocks enemies but NOT the player.
        Player: terrain 8,9 allowed (swamp/palace). *)
-    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) AND
+       (actors[actorIdx].race # 4) THEN RETURN t END;
     IF t >= 10 THEN
       IF (actorIdx = 0) AND (t = 15) THEN
         OpenDoorTile(x, y);
@@ -77,7 +78,8 @@ BEGIN
     END;
     t := GetTerrainAt(x - 4, y + 2);
     IF t = 1 THEN RETURN t END;
-    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) AND
+       (actors[actorIdx].race # 4) THEN RETURN t END;
     IF t >= 8 THEN
       IF (actorIdx = 0) AND ((t = 8) OR (t = 9)) THEN
         (* player walks through swamp/palace *)
@@ -90,7 +92,8 @@ BEGIN
     (* Additional check at character center for top-approach *)
     t := GetTerrainAt(x, y);
     IF t = 1 THEN RETURN t END;
-    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) THEN RETURN t END;
+    IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) AND
+       (actors[actorIdx].race # 4) THEN RETURN t END;
     IF t >= 10 THEN
       IF (actorIdx = 0) AND (t = 15) THEN
         OpenDoorTile(x, y);
@@ -199,6 +202,13 @@ BEGIN
 
   xTest := NewX(actors[actorIdx].absX, dir, effSpeed);
   yTest := NewY(actors[actorIdx].absY, dir, effSpeed);
+
+  (* World boundary clamp — keep within valid map area *)
+  IF xTest < 0 THEN RETURN FALSE END;
+  IF yTest < 0 THEN RETURN FALSE END;
+  IF xTest > 32767 THEN RETURN FALSE END;
+  IF yTest > 40959 THEN RETURN FALSE END;
+
   IF ProxCheck(xTest, yTest, actorIdx) # 0 THEN
     RETURN FALSE
   END;

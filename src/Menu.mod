@@ -55,7 +55,7 @@ BEGIN
   InitMenuDef(menus[MSave],  LabSave,   7, 2);
   InitMenuDef(menus[MKeys],  LabKeys,  11, 8);
   InitMenuDef(menus[MGive],  LabGive,   9, 10);
-  InitMenuDef(menus[MUse],   LabUse,   10, 8);
+  InitMenuDef(menus[MUse],   LabUse,   12, 8);
   InitMenuDef(menus[MFile],  LabFile,  10, 5);
 
   (* Items: tabs displayed+selectable, sub-options displayed *)

@@ -332,37 +332,14 @@ BEGIN
   FOR j := 0 TO OpenCount - 1 DO
     IF (openList[j].mapId = regId) AND (openList[j].doorId = secId) THEN
       k := openList[j].keyType;
+      (* Keyed doors: block movement, show "locked" message.
+         Player must use the correct key from KEYS menu. *)
       IF k > 0 THEN
-        IF brothers[activeBrother].stuff[15 + k] <= 0 THEN
-          IF NOT bumped THEN
-            AddLogLine("It's locked.");
-            bumped := TRUE
-          END;
-          RETURN FALSE
+        IF NOT bumped THEN
+          AddLogLine("It's locked.");
+          bumped := TRUE
         END;
-        DEC(brothers[activeBrother].stuff[15 + k]);
-        (* Key-opened doors: write permanently (not SaveAndSet) *)
-        SetSectorByte(x * 16, y * 32, openList[j].new1);
-        k := openList[j].new2;
-        IF k > 0 THEN
-          l := openList[j].above;
-          IF l = 1 THEN
-            SetSectorByte(x * 16, (y - 1) * 32, k)
-          ELSIF l = 3 THEN
-            SetSectorByte((x - 1) * 16, y * 32, k)
-          ELSIF l = 4 THEN
-            SetSectorByte(x * 16, (y - 1) * 32, 87);
-            SetSectorByte((x + 1) * 16, y * 32, 86);
-            SetSectorByte((x + 1) * 16, (y - 1) * 32, 88)
-          ELSE
-            SetSectorByte((x + 1) * 16, y * 32, k);
-            IF l # 2 THEN
-              SetSectorByte((x + 2) * 16, y * 32, openList[j].above)
-            END
-          END
-        END;
-        AddLogLine("It opened.");
-        RETURN TRUE
+        RETURN FALSE
       END;
       (* No-key doors: use SaveAndSet (temporary open) *)
       savedCount := 0;

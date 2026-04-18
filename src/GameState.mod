@@ -376,8 +376,25 @@ BEGIN
     Concat(msgBuf, " and ", msgBuf); Concat(msgBuf, tname, msgBuf);
     Concat(msgBuf, ".", msgBuf); ShowMessage(msgBuf)
   ELSE
-    ShowMessage("3 keys.");
-    FOR i := 0 TO 2 DO j := RandContainer(6) + 16; GiveStuff(j) END
+    (* Original: roll rand8()+8 first. Only if result=8 (12.5%) → 3 keys.
+       Otherwise → 3 of that item. Total key chance = 25% × 12.5% = 3.125% *)
+    i := RandContainer(8) + 8;
+    IF i = 8 THEN
+      ShowMessage("3 keys.");
+      FOR j := 0 TO 2 DO
+        k := RandContainer(8) + 16;
+        (* Original: remap 22→16 (Gold), 23→20 (Grey) *)
+        IF k = 22 THEN k := 16
+        ELSIF k = 23 THEN k := 20
+        END;
+        GiveStuff(k)
+      END
+    ELSE
+      GiveStuff(i); GiveStuff(i); GiveStuff(i);
+      TreasureName(i, tname);
+      Assign("3 ", msgBuf); Concat(msgBuf, tname, msgBuf);
+      Concat(msgBuf, "s.", msgBuf); ShowMessage(msgBuf)
+    END
   END
 END ContainerLoot;
 
@@ -456,15 +473,19 @@ END HandleGive;
 PROCEDURE InheritBrotherItems;
 VAR prev, k: INTEGER;
 BEGIN
-  (* Find the most recently dead brother and inherit their stuff *)
-  FOR prev := 0 TO 2 DO
-    IF (prev # activeBrother) AND (NOT brothers[prev].alive) THEN
-      FOR k := 0 TO 30 DO
-        INC(brothers[activeBrother].stuff[k], brothers[prev].stuff[k]);
-        brothers[prev].stuff[k] := 0
-      END
+  (* Original: inherit from the specific previous brother.
+     brother=1 (Philip active) → inherit from 0 (Julian).
+     brother=2 (Kevin active) → inherit from 1 (Philip). *)
+  prev := activeBrother - 1;
+  IF (prev >= 0) AND (prev <= 2) AND (NOT brothers[prev].alive) THEN
+    FOR k := 0 TO 30 DO
+      INC(brothers[activeBrother].stuff[k], brothers[prev].stuff[k]);
+      brothers[prev].stuff[k] := 0
     END
-  END
+  END;
+  (* Hide ghost brothers — original: ob_listg[3].ob_stat = ob_listg[4].ob_stat = 0 *)
+  objects[0].status := 0;
+  objects[1].status := 0
 END InheritBrotherItems;
 
 PROCEDURE HandleKeys(optIdx: INTEGER);
@@ -633,10 +654,16 @@ BEGIN
           GoMenu(0) |
         10: (* Lasso — no USE effect, riding happens automatically *)
           GoMenu(0) |
-        11: (* Shell — call turtle carrier *)
+        11: (* Shell — call turtle carrier.
+              Original: blocked inside manor region (11194-21373, 10205-16208) *)
           IF HasStuff(6) THEN
-            SpawnTurtle;
-            ShowMessage("The turtle hears your call!")
+            IF (actors[0].absX > 11194) AND (actors[0].absX < 21373) AND
+               (actors[0].absY > 10205) AND (actors[0].absY < 16208) THEN
+              ShowMessage("Nothing happens here.")
+            ELSE
+              SpawnTurtle;
+              ShowMessage("The turtle hears your call!")
+            END
           ELSE ShowMessage("% doesn't have one.") END;
           GoMenu(0) |
         12: (* Key → Keys sub-menu *)
@@ -899,8 +926,14 @@ BEGIN
         ShowMessage("The good fairy has revived you!")
       ELSE
         (* BROTHER SWITCH — luck exhausted.
-           Original: revive(TRUE) — new brother at Tambry. *)
+           Original: revive(TRUE) — new brother at Tambry.
+           Place bones at death location, make ghost visible at stone ring. *)
         AddObj(actors[0].absX, actors[0].absY, 28, 1, -1);
+        (* Ghost brother appears — original: ob_listg[brother+2].ob_stat = 3.
+           Our ghost objects are at indices 0 (Julian) and 1 (Philip). *)
+        IF activeBrother <= 1 THEN
+          objects[activeBrother].status := 3
+        END;
         IF SwitchToNext() THEN
           actors[0].absX := 19036; actors[0].absY := 15755;
           actors[0].state := StStill;

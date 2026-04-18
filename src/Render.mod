@@ -486,12 +486,23 @@ BEGIN
     inum := WalkBase(actors[i].facing) + 1
   END;
 
-  (* Snake (race 4): offset by 36 into DKnight sheet *)
+  (* Snake (race 4): dedicated frame lookup.
+     4 directions, 2 walk frames each, dead frame at +3 from base.
+     Sheet layout: S=36,37 dead=39 / W=44,45 dead=47 /
+                   N=52,53 dead=55 / E=60,61 dead=63 *)
   IF actors[i].race = 4 THEN
-    IF (actors[i].state # StDying) AND (actors[i].state # StDead) THEN
-      INC(inum, 36)
+    CASE actors[i].facing OF
+      0, 1, 7: base := 52 |  (* N *)
+      2, 3:    base := 60 |  (* E *)
+      4, 5:    base := 36 |  (* S *)
+      6:       base := 44    (* W *)
+    ELSE base := 36
     END;
-    RETURN inum
+    IF (actors[i].state = StDying) OR (actors[i].state = StDead) THEN
+      RETURN base + 3  (* dead snake: 39, 47, 55, 63 *)
+    ELSE
+      RETURN base + (cycle DIV 4) MOD 2  (* alternate 0/1 *)
+    END
   END;
 
   (* Even/odd interleave for all frames *)
@@ -906,11 +917,11 @@ BEGIN
   IF actors[i].actorType = TypeCarrier THEN
     IF actors[i].race = 5 THEN
       (* Turtle: 16 frames, 2 per direction.
-         Sheet order: S,SW,W,NW,N,NE,E,SE (Amiga standard)
+         Sheet order (top→bottom): NW,N,NE,E,SE,S,SW,W
          Our facing: N=0,NE=1,E=2,SE=3,S=4,SW=5,W=6,NW=7
-         Remap: our→sheet: 0→4, 1→5, 2→6, 3→7, 4→0, 5→1, 6→2, 7→3 *)
+         Remap: (facing + 1) MOD 8 *)
       IF turtleTex # NIL THEN
-        frame := ((actors[i].facing + 4) MOD 8) * 2 + (cycle DIV 4 MOD 2);
+        frame := ((actors[i].facing + 1) MOD 8) * 2 + (cycle DIV 4 MOD 2);
         SetColorMod(turtleTex, fadeR, fadeG, fadeB);
         DrawTexRegion(turtleTex, 0, frame * 32, 32, 32,
                       sx - S(16), sy - S(16), S(32), S(32))
@@ -945,12 +956,19 @@ BEGIN
   SetClip(ren, 0, 0, S(PlayW), S(PlayH));
 
   (* Build sorted draw order by absY — actors further back draw first.
-     Simple insertion sort on small array. *)
+     Simple insertion sort on small array.
+     When riding, player sorts slightly ahead of carrier so player
+     draws on top (closer to camera). *)
   n := 0;
   FOR i := 0 TO actorCount - 1 DO
     order[n] := i;
     j := n;
-    WHILE (j > 0) AND (actors[order[j-1]].absY > actors[i].absY) DO
+    sy := actors[i].absY;
+    IF (i = 0) AND (riding # 0) THEN INC(sy) END;
+    WHILE (j > 0) DO
+      tmp := actors[order[j-1]].absY;
+      IF (order[j-1] = 0) AND (riding # 0) THEN INC(tmp) END;
+      IF tmp <= sy THEN EXIT END;  (* use <= so equal Y preserves order *)
       order[j] := order[j-1];
       DEC(j)
     END;

@@ -167,37 +167,10 @@ BEGIN
   END
 END UpdateSwanCarrier;
 
-PROCEDURE SpawnTurtle;
-VAR i, tx, ty, terrain: INTEGER;
+PROCEDURE PlaceTurtle(tx, ty: INTEGER);
 BEGIN
-  (* Find nearby water tile to spawn turtle — wider search *)
-  FOR i := 0 TO 80 DO
-    tx := actors[0].absX + (i MOD 9 - 4) * 32;
-    ty := actors[0].absY + (i DIV 9 - 4) * 32;
-    terrain := GetTerrainAt(tx, ty);
-    IF (terrain = 4) OR (terrain = 5) THEN
-      (* Found water — spawn turtle here *)
-      actors[CarrierSlot].absX := tx;
-      actors[CarrierSlot].absY := ty;
-      actors[CarrierSlot].actorType := TypeCarrier;
-      actors[CarrierSlot].state := StStill;
-      actors[CarrierSlot].vitality := 50;
-      actors[CarrierSlot].weapon := 0;
-      actors[CarrierSlot].environ := 0;
-      actors[CarrierSlot].visible := TRUE;
-      actors[CarrierSlot].race := 5;
-      activeCarrier := 5;
-      IF actorCount < 4 THEN actorCount := 4 END;
-      WriteString("Carrier: turtle spawned at ");
-      WriteInt(tx, 1); WriteString(","); WriteInt(ty, 1);
-      WriteString(" slot="); WriteInt(CarrierSlot, 1);
-      WriteString(" actorCount="); WriteInt(actorCount, 1); WriteLn;
-      RETURN
-    END
-  END;
-  (* No water found — spawn right next to player *)
-  actors[CarrierSlot].absX := actors[0].absX + 20;
-  actors[CarrierSlot].absY := actors[0].absY;
+  actors[CarrierSlot].absX := tx;
+  actors[CarrierSlot].absY := ty;
   actors[CarrierSlot].actorType := TypeCarrier;
   actors[CarrierSlot].state := StStill;
   actors[CarrierSlot].vitality := 50;
@@ -207,7 +180,38 @@ BEGIN
   actors[CarrierSlot].race := 5;
   activeCarrier := 5;
   IF actorCount < 4 THEN actorCount := 4 END;
-  WriteString("Carrier: turtle spawned (no water)"); WriteLn
+  WriteString("Carrier: turtle spawned at ");
+  WriteInt(tx, 1); WriteString(","); WriteInt(ty, 1); WriteLn
+END PlaceTurtle;
+
+PROCEDURE SpawnTurtle;
+(* Original get_turtle: try 25 random positions 150-213px from player
+   in a random direction, looking for deep water (terrain 5).
+   xdir = {-2,0,2,3,2,0,-2,-3}, ydir = {-2,-3,-2,0,2,3,2,0} *)
+VAR i, dir, dist, tx, ty, terrain, rng: INTEGER;
+    xdir, ydir: ARRAY [0..7] OF INTEGER;
+BEGIN
+  xdir[0] := -2; xdir[1] :=  0; xdir[2] := 2; xdir[3] := 3;
+  xdir[4] :=  2; xdir[5] :=  0; xdir[6] := -2; xdir[7] := -3;
+  ydir[0] := -2; ydir[1] := -3; ydir[2] := -2; ydir[3] := 0;
+  ydir[4] :=  2; ydir[5] :=  3; ydir[6] := 2; ydir[7] := 0;
+  rng := 54321;
+  FOR i := 0 TO 24 DO
+    rng := rng * 1103515245 + 12345;
+    IF rng < 0 THEN rng := -rng END;
+    dir := (rng DIV 65536) MOD 8;
+    rng := rng * 1103515245 + 12345;
+    IF rng < 0 THEN rng := -rng END;
+    dist := 150 + (rng DIV 65536) MOD 64;
+    tx := actors[0].absX + (xdir[dir] * dist) DIV 2;
+    ty := actors[0].absY + (ydir[dir] * dist) DIV 2;
+    terrain := GetTerrainAt(tx, ty);
+    IF terrain = 5 THEN
+      PlaceTurtle(tx, ty);
+      RETURN
+    END
+  END;
+  WriteString("Carrier: no deep water found for turtle"); WriteLn
 END SpawnTurtle;
 
 (* Check if player entered swan extent (2118-2618, 27237-27637) with lasso *)

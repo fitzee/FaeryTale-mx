@@ -347,33 +347,28 @@ END EnemiesNearby;
 (* --- Exported spawn for forced encounters --- *)
 
 PROCEDURE SpawnGroup(heroX, heroY, race, count, spread: INTEGER);
-VAR slot, j, xtest, ytest, spawned, dir, dist: INTEGER;
-    encX, encY: INTEGER;
+VAR slot, j, xtest, ytest, spawned: INTEGER;
 BEGIN
   IF (race < 0) OR (race > 10) THEN RETURN END;
-  dir := Rand(8);
-  dist := 150 + Rand(64);
-  encX := heroX + (spawnDirX[dir] * dist) DIV 2;
-  encY := heroY + (spawnDirY[dir] * dist) DIV 2;
+  (* Original set_encounter: place each enemy at center ± spread/2.
+     No 150px offset — spawn directly around given center. *)
   spawned := 0;
   WHILE spawned < count DO
     slot := FindFreeSlot();
     IF slot < 0 THEN RETURN END;
     j := 0;
     LOOP
-      xtest := encX + Rand(64) - 32;
-      ytest := encY + Rand(64) - 32;
+      xtest := heroX + Rand(spread) - (spread DIV 2);
+      ytest := heroY + Rand(spread) - (spread DIV 2);
       IF ProxCheck(xtest, ytest, slot) = 0 THEN EXIT END;
       INC(j);
       IF j >= MaxTry THEN EXIT END
     END;
     IF j < MaxTry THEN
       SetupEnemy(slot, race, xtest, ytest);
-      IF slot >= actorCount THEN actorCount := slot + 1 END;
-      INC(spawned)
-    ELSE
-      RETURN
-    END
+      IF slot >= actorCount THEN actorCount := slot + 1 END
+    END;
+    INC(spawned)
   END
 END SpawnGroup;
 
@@ -403,20 +398,19 @@ BEGIN
   END;
 
   (* === Forced encounters for special extents (etype >= 50) === *)
+  (* Original: xtype 60/61 force-spawns immediately, no actors_on_screen gate.
+     Condition: slot 3 doesn't have the right race yet, or actorCount < 4. *)
   IF (et = 61) AND (NOT turtleEggs) AND (NOT turtleEggsDone) AND
-     (NOT loadPending) AND
-     (NOT ActorsOnScreen(heroX, heroY)) AND
-     (CountLivingEnemies() = 0) THEN
-    (* Turtle eggs: force snake spawn *)
+     ((actorCount < 4) OR (actors[3].race # extents[ei].v3)) THEN
     turtleEggs := TRUE;
-    pendingRace := extents[ei].v3;  (* race 4 = snakes *)
     cnt := extents[ei].v1;
     IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
     IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
     IF cnt < 1 THEN cnt := 1 END;
-    pendingCount := cnt;
-    pendingMix := 0;
-    loadPending := TRUE;
+    (* Force immediate spawn around extent center *)
+    SpawnGroup((extents[ei].x1 + extents[ei].x2) DIV 2,
+               (extents[ei].y1 + extents[ei].y2) DIV 2,
+               extents[ei].v3, cnt, 63);
     RETURN
   END;
 

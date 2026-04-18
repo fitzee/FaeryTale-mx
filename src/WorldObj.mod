@@ -50,7 +50,7 @@ BEGIN
   AddObj( 4981,  6306, 12, 3, 0);
 
   (* === Region 1 — Maze Forest North === *)
-  AddObj(23087,  5667, 102, 5, 1);   (* turtle eggs — not pickable *)
+  AddObj(23087,  5667, 102, 1, 1);   (* turtle eggs — visible, pickup refused *)
 
   (* === Region 2 — Swamp Land === *)
   AddObj(13668, 15000,  0, 3, 2);
@@ -87,7 +87,7 @@ BEGIN
   AddObj(24794, 13102, 13, 3, 6);
 
   (* === Region 7 — Southern Mountain === *)
-  AddObj(23297,  5797, 102, 5, 7);   (* turtle eggs — not pickable *)
+  AddObj(23297,  5797, 102, 1, 7);   (* turtle eggs — visible, pickup refused *)
 
   (* === Region 8 — Building Interiors === *)
   (* NPCs *)
