@@ -55,7 +55,7 @@ BEGIN
   InitMenuDef(menus[MSave],  LabSave,   7, 2);
   InitMenuDef(menus[MKeys],  LabKeys,  11, 8);
   InitMenuDef(menus[MGive],  LabGive,   9, 10);
-  InitMenuDef(menus[MUse],   LabUse,   12, 8);
+  InitMenuDef(menus[MUse],   LabUse,   14, 8);
   InitMenuDef(menus[MFile],  LabFile,  10, 5);
 
   (* Items: tabs displayed+selectable, sub-options displayed *)
@@ -183,7 +183,7 @@ BEGIN
   (* All menus: slots 0-4 are category tabs (always displayed).
      Sub-items start at slot 5. *)
 
-  (* USE: 5=Dirk 6=Mace 7=Sword 8=Bow 9=Wand 10=Lasso 11=Shell *)
+  (* USE: 5=Dirk 6=Mace 7=Sword 8=Bow 9=Wand 10=Lasso 11=Shell 12=Key 13=Sun *)
   menus[MUse].enabled[5]  := WF(1);
   menus[MUse].enabled[6]  := WF(2);
   menus[MUse].enabled[7]  := WF(3);
@@ -191,6 +191,13 @@ BEGIN
   menus[MUse].enabled[9]  := WF(5);
   menus[MUse].enabled[10] := SF(5);   (* Lasso *)
   menus[MUse].enabled[11] := SF(6);   (* Shell *)
+  (* Key: enabled if any key owned — original: menus[USE].enabled[7] = j *)
+  j := 8;
+  FOR i := 0 TO 5 DO
+    IF brothers[activeBrother].stuff[16 + i] > 0 THEN j := 10 END
+  END;
+  menus[MUse].enabled[12] := j;       (* Keys *)
+  menus[MUse].enabled[13] := SF(7);   (* Sun Stone *)
 
   (* MAGIC: 5-11 = stuff[9-15] *)
   FOR i := 0 TO 6 DO

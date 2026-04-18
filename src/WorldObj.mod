@@ -305,12 +305,10 @@ BEGIN
            (BAND(CARDINAL(id), 128) # 0) THEN
           ht := 8
         END;
-        IF sprY + ht <= 1856 THEN
-          DrawTexRegion(objTex,
-                        0, sprY, ObjSprW, ht,
-                        sx - S(8), sy - S(ht DIV 2),
-                        S(ObjSprW), S(ht))
-        END
+        DrawTexRegion(objTex,
+                      0, sprY, ObjSprW, ht,
+                      sx - S(8), sy - S(ht DIV 2),
+                      S(ObjSprW), S(ht))
       END
     END
   END;

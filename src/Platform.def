@@ -36,6 +36,7 @@ TYPE
 VAR
   win: Window;
   ren: Renderer;
+  cheatKeys: BOOLEAN;  (* bypass key requirements on doors *)
 
 PROCEDURE Init(): BOOLEAN;
 PROCEDURE Shutdown;

@@ -249,7 +249,7 @@ BEGIN
   blitwide := ((sprWorldX + SprW - 1) DIV TilePixW) - xbw + 1;
   ym2 := ((sprWorldY + SprH - 1) DIV TilePixH) - ym1;
 
-  heroSec := GetSectorByte(actors[actorIdx].absX, actors[actorIdx].absY);
+  heroSec := GetSectorByte(sprWorldX + 8, sprWorldY + 16);
 
   FOR xm := 0 TO blitwide - 1 DO
     FOR ym := 0 TO ym2 DO
@@ -882,12 +882,21 @@ BEGIN
     END
   END;
 
-  (* NPC / SETFIG sprites — with tile masking like player/enemies *)
+  (* NPC / SETFIG sprites — with tile masking like player/enemies.
+     Original: king (race 5) and sorceress (race 7) skip masking entirely
+     (fmain.c:3578 — goto nomask for race 0x85, 0x87). *)
   IF actors[i].actorType = TypeSetfig THEN
     GetSetfigSprite(actors[i].race, npcBank, npcFrame);
     IF (npcBank >= 0) AND (npcBank <= 4) AND (npcTex[npcBank] # NIL) THEN
       SetColorMod(npcTex[npcBank], fadeR, fadeG, fadeB);
-      BuildSpriteMaskFor(i);
+      IF (actors[i].race = 5) OR (actors[i].race = 7) THEN
+        (* King/sorceress: no masking — clear mask to all visible *)
+        FOR my := 0 TO SprH - 1 DO
+          FOR mx := 0 TO SprW - 1 DO bmask[mx][my] := TRUE END
+        END
+      ELSE
+        BuildSpriteMaskFor(i)
+      END;
       FOR my := 0 TO SprH - 1 DO
         FOR mx := 0 TO SprW - 1 DO
           IF bmask[mx][my] THEN

@@ -5,6 +5,7 @@ FROM Assets IMPORT GetSectorByte, SetSectorByte, GetTerrainAt, regions,
                    currentRegion;
 FROM Brothers IMPORT brothers, activeBrother;
 FROM HudLog IMPORT AddLogLine;
+FROM Platform IMPORT cheatKeys;
 
 CONST
   CAVE  = 18;
@@ -333,8 +334,9 @@ BEGIN
     IF (openList[j].mapId = regId) AND (openList[j].doorId = secId) THEN
       k := openList[j].keyType;
       (* Keyed doors: block movement, show "locked" message.
-         Player must use the correct key from KEYS menu. *)
-      IF k > 0 THEN
+         Player must use the correct key from KEYS menu.
+         Cheat mode bypasses all locks. *)
+      IF (k > 0) AND (NOT cheatKeys) THEN
         IF NOT bumped THEN
           AddLogLine("It's locked.");
           bumped := TRUE

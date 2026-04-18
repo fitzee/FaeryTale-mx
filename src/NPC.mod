@@ -27,7 +27,8 @@ VAR
 
   (* One-time reward flags *)
   priestStatueGiven:    BOOLEAN;
-  sorceressStatueGiven: BOOLEAN;
+  sorceressVisited: BOOLEAN;
+  rng: INTEGER;
 
   (* Speech table — transcribed from original narr.c speeches[] *)
   speeches: ARRAY [0..59] OF ARRAY [0..127] OF CHAR;
@@ -238,7 +239,7 @@ END LookAtNPC;
 (* Select speech and apply side effects based on NPC race.
    Returns speech index. Modifies inventory for one-time rewards. *)
 PROCEDURE SelectSpeech(actorIdx: INTEGER): INTEGER;
-VAR race, goal, kind: INTEGER;
+VAR race, goal, kind, i: INTEGER;
 BEGIN
   race := actors[actorIdx].race;
   goal := actors[actorIdx].goal;
@@ -266,13 +267,26 @@ BEGIN
     4:  RETURN 16 |    (* princess *)
     5:  RETURN 17 |    (* king *)
     6:  RETURN 20 |    (* noble *)
-    7:  (* sorceress — one-time statue *)
-      IF NOT sorceressStatueGiven THEN
-        sorceressStatueGiven := TRUE;
-        GiveStuff(StStatue);
+    7:  (* sorceress — first visit: speech 45 + set flag.
+          Repeat visits: luck += 5 if luck < rand(64). *)
+      IF NOT sorceressVisited THEN
+        sorceressVisited := TRUE;
+        (* Original: ob_listg[9].ob_stat = 1 — makes gold statue
+           appear on ground near sorceress for player to Take *)
+        FOR i := 0 TO objCount - 1 DO
+          IF (objects[i].x = 12025) AND (objects[i].y = 37639) AND
+             (objects[i].objId = 149) THEN
+            objects[i].status := 1
+          END
+        END;
         RETURN 45
       ELSE
-        RETURN 49
+        rng := rng * 1103515245 + 12345;
+        IF rng < 0 THEN rng := -rng END;
+        IF brothers[activeBrother].luck < (rng DIV 65536) MOD 64 THEN
+          INC(brothers[activeBrother].luck, 5)
+        END;
+        RETURN -1  (* no speech, just luck boost *)
       END |
     8:  RETURN 12 |    (* bartender — "buy something?" *)
     9:  RETURN 46 |    (* witch *)
@@ -294,7 +308,9 @@ BEGIN
   idx := FindNearestNPC(heroX, heroY);
   IF idx < 0 THEN RETURN FALSE END;
   speechIdx := SelectSpeech(idx);
-  IF (speechIdx >= 0) AND (speechIdx < MaxSpeeches) THEN
+  IF speechIdx < 0 THEN
+    speech[0] := 0C;  (* no speech — silent interaction like luck boost *)
+  ELSIF speechIdx < MaxSpeeches THEN
     Assign(speeches[speechIdx], speech)
   ELSE
     Assign("...", speech)
@@ -357,7 +373,8 @@ VAR i: INTEGER;
 BEGIN
   FOR i := 0 TO 199 DO materialized[i] := FALSE END;
   priestStatueGiven := FALSE;
-  sorceressStatueGiven := FALSE;
+  sorceressVisited := FALSE;
+  rng := 99991;
   InitSetfigTable;
   InitSpeeches
 END InitNPCs;

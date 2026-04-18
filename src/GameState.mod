@@ -3,7 +3,7 @@ IMPLEMENTATION MODULE GameState;
 FROM Strings IMPORT Assign, Concat;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT PollInput, InputState, DirNone,
-                    ScreenW, TextH, Scale;
+                    ScreenW, PlayH, TextH, Scale, cheatKeys;
 FROM Actor IMPORT actors, actorCount, InitAll,
                   TypeEnemy,
                   StWalking, StStill, StFighting, StDead, StDying, StShoot1,
@@ -36,7 +36,6 @@ FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
 FROM Music IMPORT SetMood, StopMusic, ResumeMusic, IsPlaying,
                   MoodDay, MoodNight, MoodIndoor,
                   MoodBattle, MoodDeath;
-FROM Platform IMPORT PlayH, Scale, ScreenW;
 FROM Doors IMPORT InitDoors, CheckDoor, OpenDoorTile, RestoreDoorTiles,
                   CheckCloseDoors, UseKeyOnDoor;
 FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
@@ -143,6 +142,7 @@ BEGIN
   saveMode := FALSE;
   cheatGod := FALSE;
   cheatSpeed := FALSE;
+  cheatKeys := FALSE;  (* in Platform *)
   lightTimer := 0;
   secretTimer := 0;
   freezeTimer := 0;
@@ -745,16 +745,16 @@ PROCEDURE HandleTalk;
 VAR speech: ARRAY [0..127] OF CHAR;
 BEGIN
   IF TalkToCarrier(speech) THEN ShowMessage(speech)
-  ELSIF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN ShowMessage(speech)
+  ELSIF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN
+    IF speech[0] # 0C THEN ShowMessage(speech) END
   ELSE ShowMessage("Nobody to talk to here.") END
 END HandleTalk;
 
 PROCEDURE HandleYell;
-VAR speech: ARRAY [0..127] OF CHAR;
 BEGIN
-  IF TalkToNPC(actors[0].absX, actors[0].absY, speech) THEN
-    ShowMessage('"No need to shout, son!" he said.')
-  ELSE ShowMessage("Nobody to talk to here.") END
+  (* Original: yelling doesn't interact with NPCs.
+     Just a generic shout — no side effects. *)
+  ShowMessage("Nobody seems to hear.")
 END HandleYell;
 
 PROCEDURE CheckEnvironment;
@@ -1066,6 +1066,10 @@ BEGIN
     cheatSpeed := NOT cheatSpeed;
     IF cheatSpeed THEN ShowMessage("SPEED MODE ON")
     ELSE ShowMessage("SPEED MODE OFF") END
+  ELSIF input.menuKey = '8' THEN
+    cheatKeys := NOT cheatKeys;
+    IF cheatKeys THEN ShowMessage("NO KEYS MODE ON")
+    ELSE ShowMessage("NO KEYS MODE OFF") END
   ELSIF input.menuKey # 0C THEN HandleMenuKey(input.menuKey) END;
     IF input.mouseClick THEN HandleMenuClick(input.mouseX, input.mouseY) END
   END;

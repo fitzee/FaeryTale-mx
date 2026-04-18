@@ -89,7 +89,7 @@ BEGIN
       ELSE RETURN t
       END
     END;
-    (* Additional check at character center for top-approach *)
+    (* Additional check at character center *)
     t := GetTerrainAt(x, y);
     IF t = 1 THEN RETURN t END;
     IF (t >= 4) AND (t <= 5) AND (actorIdx # 0) AND
@@ -99,6 +99,21 @@ BEGIN
         OpenDoorTile(x, y);
         RETURN 15
       ELSE RETURN t
+      END
+    END;
+    (* Directional door checks — detect doors in all approach directions.
+       The y+2 checks above catch south-approach (walking north).
+       These catch north/east/west approaches. *)
+    FOR terrain := -8 TO 8 BY 4 DO
+      t := GetTerrainAt(x + terrain, y - 4);
+      IF (t = 15) AND (actorIdx = 0) THEN
+        OpenDoorTile(x + terrain, y - 4);
+        RETURN 15
+      END;
+      t := GetTerrainAt(x + terrain, y + 8);
+      IF (t = 15) AND (actorIdx = 0) THEN
+        OpenDoorTile(x + terrain, y + 8);
+        RETURN 15
       END
     END
   ELSE
