@@ -28,4 +28,8 @@ PROCEDURE ActorsOnScreen(heroX, heroY: INTEGER): BOOLEAN;
 (* TRUE if any visible living enemy is within 300px — for battleflag *)
 PROCEDURE EnemiesNearby(heroX, heroY: INTEGER): BOOLEAN;
 
+(* Reposition an extent's bounding box centered on (x,y).
+   Original move_extent: ±250 X, ±200 Y from center. *)
+PROCEDURE MoveExtent(extIdx, x, y: INTEGER);
+
 END Encounter.

@@ -11,7 +11,7 @@ FROM Actor IMPORT actors, actorCount, InitAll,
                   GoalAttack1, GoalFlee, GoalStand;
 FROM World IMPORT InitWorld, TileSize, WorldW, WorldH, UpdateCamera,
                   GetTerrain, TerrSwamp, TerrWater, camX, camY;
-FROM Movement IMPORT MoveActor;
+FROM Movement IMPORT MoveActor, ProxCheck;
 FROM EnemyAI IMPORT UpdateEnemies;
 FROM Combat IMPORT UpdateCombat, SearchBody;
 FROM Items IMPORT InitItems, CheckPickup, UseItem, InventoryCount,
@@ -42,7 +42,7 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
                      AddObj, DistributeRegion, LeaveItem;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
-                      ActorsOnScreen;
+                      ActorsOnScreen, MoveExtent;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
                TalkToCarrier, riding, turtleEggs, turtleEggsDone,
                UpdateDragon, dragonFire;
@@ -665,6 +665,7 @@ BEGIN
               ShowMessage("Nothing happens here.")
             ELSE
               SpawnTurtle;
+              MoveExtent(1, actors[3].absX, actors[3].absY);
               ShowMessage("The turtle hears your call!")
             END
           ELSE ShowMessage("% doesn't have one.") END;
@@ -761,9 +762,26 @@ BEGIN
 END HandleYell;
 
 PROCEDURE CheckEnvironment;
+VAR sec: INTEGER;
 BEGIN
   (* Skip if already dying/dead — original checkdead handles transition *)
   IF (actors[0].state = StDying) OR (actors[0].state = StDead) THEN RETURN END;
+
+  (* Original fmain.c:2340-2353 — sector 181 quicksand/whirlpool.
+     When environ reaches 30 in sector 181, teleport to underground
+     instead of drowning. xfer(0x1080, 34950, FALSE) = (4224, 34950). *)
+  IF actors[0].environ = 30 THEN
+    sec := GetSectorByte(actors[0].absX, actors[0].absY);
+    IF sec = 181 THEN
+      actors[0].environ := 0;
+      actors[0].absX := 4224;
+      actors[0].absY := 34950;
+      SwitchRegion(9);
+      actorCount := 1;
+      ShowMessage("The ground swallows you up!");
+      RETURN
+    END
+  END;
 
   (* Original fmain.c:2444-2451 — drowning at environ 30.
      Every 8 frames, decrement vitality. checkdead(i,6) handles death.
@@ -865,6 +883,7 @@ BEGIN
   (* Turtle eggs: spawn turtle after guards defeated *)
   IF turtleEggs THEN
     SpawnTurtle;
+    MoveExtent(1, actors[3].absX, actors[3].absY);
     turtleEggs := FALSE;
     turtleEggsDone := TRUE;
     ShowMessage("The turtle appears, grateful you saved its eggs!")
@@ -1034,6 +1053,16 @@ BEGIN
     actors[0].absX := newX; actors[0].absY := newY;
     IF newReg >= 0 THEN RestoreDoorTiles; SwitchRegion(newReg)
     ELSE RestoreDoorTiles; SwitchRegion(DetectRegion(newX, newY)) END;
+    (* Original xfer: while(proxcheck(hero_x,hero_y,0)) hero_y++
+       Nudge player out of impassable terrain after region transition.
+       Terrain 1 = rock, >= 10 = walls/doors. Max 32px nudge. *)
+    newX := 0;
+    newReg := GetTerrainAt(actors[0].absX, actors[0].absY);
+    WHILE ((newReg = 1) OR (newReg >= 10)) AND (newX < 32) DO
+      INC(actors[0].absY);
+      INC(newX);
+      newReg := GetTerrainAt(actors[0].absX, actors[0].absY)
+    END;
     InitPlace(actors[0].absX, actors[0].absY, currentRegion);
     doorCooldown := 60
   END

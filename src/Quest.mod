@@ -6,7 +6,8 @@ FROM SYSTEM IMPORT ADR;
 FROM Strings IMPORT Assign, Concat;
 FROM Actor IMPORT actors, actorCount;
 FROM Brothers IMPORT brothers, activeBrother, AddWealth;
-FROM Assets IMPORT currentRegion;
+FROM Assets IMPORT currentRegion, SwitchRegion, DetectRegion, GetTerrainAt;
+FROM Narration IMPORT InitPlace;
 FROM WorldObj IMPORT objects, objCount;
 FROM HudLog IMPORT AddLogLine;
 FROM BinaryIO IMPORT OpenRead, OpenWrite, Close, ReadBytes, WriteBytes, Done;
@@ -188,6 +189,36 @@ BEGIN
   actors[0].vitality := brothers[activeBrother].vitality;
   actors[0].environ := 0;
   actorCount := 1;
+
+  (* Detect and switch to the correct region for loaded position *)
+  SwitchRegion(DetectRegion(actors[0].absX, actors[0].absY));
+  (* Nudge out of blocked terrain if stuck — try small offsets.
+     Terrain 1 = rock, >= 10 = walls/doors — both block movement. *)
+  v := GetTerrainAt(actors[0].absX, actors[0].absY);
+  IF (v = 1) OR (v >= 10) THEN
+    FOR i := 1 TO 16 DO
+      v := GetTerrainAt(actors[0].absX, actors[0].absY + i);
+      IF (v # 1) AND (v < 10) THEN
+        INC(actors[0].absY, i); i := 16
+      ELSE
+        v := GetTerrainAt(actors[0].absX, actors[0].absY - i);
+        IF (v # 1) AND (v < 10) THEN
+          DEC(actors[0].absY, i); i := 16
+        ELSE
+          v := GetTerrainAt(actors[0].absX + i, actors[0].absY);
+          IF (v # 1) AND (v < 10) THEN
+            INC(actors[0].absX, i); i := 16
+          ELSE
+            v := GetTerrainAt(actors[0].absX - i, actors[0].absY);
+            IF (v # 1) AND (v < 10) THEN
+              DEC(actors[0].absX, i); i := 16
+            END
+          END
+        END
+      END
+    END
+  END;
+  InitPlace(actors[0].absX, actors[0].absY, currentRegion);
 
   AddLogLine("Game loaded.");
   WriteString("Quest: loaded from "); WriteString(path); WriteLn;

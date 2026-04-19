@@ -403,6 +403,10 @@ BEGIN
   curExtent := ei;
   xtype := et;
 
+  (* Original: active_carrier = 0 when xtype < 70.
+     Carrier only stays active inside etype=70 extents. *)
+  IF et < 70 THEN activeCarrier := 0 END;
+
   (* Peace zones — no spawning *)
   IF et >= 80 THEN RETURN END;
 
@@ -548,5 +552,16 @@ BEGIN
   InitExtents;
   InitSpawnDirs
 END InitEncounters;
+
+(* Original move_extent: repositions extent bounding box centered on (x,y).
+   Used when turtle spawns — moves extent 1 so carrier zone follows turtle. *)
+PROCEDURE MoveExtent(extIdx, x, y: INTEGER);
+BEGIN
+  IF (extIdx < 0) OR (extIdx >= MaxExtents) THEN RETURN END;
+  extents[extIdx].x1 := x - 250;
+  extents[extIdx].y1 := y - 200;
+  extents[extIdx].x2 := x + 250;
+  extents[extIdx].y2 := y + 200
+END MoveExtent;
 
 END Encounter.
