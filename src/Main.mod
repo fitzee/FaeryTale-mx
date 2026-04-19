@@ -7,7 +7,7 @@ FROM GameState IMPORT InitGame, UpdateGame, running, FrameTime,
                       mapToggled, viewStatus;
 FROM Render IMPORT InitOverlay, DrawWorld, DrawItems, DrawActors,
                    DrawHUD, DrawMenu, DrawMessage,
-                   DrawInventory, DrawFairy, LoadCompass;
+                   DrawInventory, DrawFairy, DrawWitchBeam, LoadCompass;
 FROM DebugMap IMPORT InitDebugMap, ToggleDebugMap, UpdateDebugMap;
 FROM Menu IMPORT InitMenus;
 FROM HudFont IMPORT LoadHudFont;
@@ -68,6 +68,7 @@ BEGIN
       DrawItems;
       DrawActors;
       DrawFairy;
+      DrawWitchBeam;
       DrawMissiles
     END;
     DrawHUD;

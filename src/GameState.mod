@@ -5,7 +5,7 @@ FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 FROM Platform IMPORT PollInput, InputState, DirNone,
                     ScreenW, PlayH, TextH, Scale, cheatKeys;
 FROM Actor IMPORT actors, actorCount, InitAll,
-                  TypeEnemy,
+                  TypeEnemy, TypeSetfig,
                   StWalking, StStill, StFighting, StDead, StDying, StShoot1,
                   StSleep,
                   GoalAttack1, GoalFlee, GoalStand;
@@ -29,7 +29,7 @@ FROM NPC IMPORT InitNPCs, MaterializeNPCs, TalkToNPC, LookAtNPC,
                FindNearestNPC, GiveToNPC;
 FROM Assets IMPORT InitAssets, PreloadAll, LoadHUD, currentRegion,
                    CheckRegionSwitch, SwitchRegion, DetectRegion,
-                   GetTerrainAt, GetSectorByte;
+                   GetTerrainAt, GetSectorByte, GetMapSector;
 FROM Menu IMPORT HandleMenuKey, SetOptions, cmode, menus, realOptions,
                  optionCount, MItems, MBuy, MGive, MGame, MSave, MFile, GoMenu,
                  PanelX, PanelY, BtnW, BtnH;
@@ -45,7 +45,7 @@ FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
                       ActorsOnScreen, MoveExtent;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
                TalkToCarrier, riding, turtleEggs, turtleEggsDone,
-               UpdateDragon, dragonFire;
+               UpdateDragon, dragonFire, swanDismount, RideSwan;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
                SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -66,6 +66,7 @@ VAR
   hunger: INTEGER;
   sleepWait: INTEGER;
   containerRng: INTEGER;
+  witchRng: INTEGER;
   saveMode: BOOLEAN;  (* TRUE=saving, FALSE=loading for File menu *)
   cheatGod: BOOLEAN;   (* invincibility *)
   cheatSpeed: BOOLEAN;  (* 5x movement speed *)
@@ -140,6 +141,7 @@ BEGIN
   hunger := 0;
   sleepWait := 0;
   containerRng := 31337;
+  witchRng := 54321;
   saveMode := FALSE;
   cheatGod := FALSE;
   cheatSpeed := FALSE;
@@ -150,6 +152,10 @@ BEGIN
   fairyActive := FALSE;
   fairyX := 0;
   colorPlayTimer := 0;
+  witchFlag := FALSE;
+  witchIndex := 0;
+  witchDir := 1;
+  witchS1 := 0; witchS2 := 0;
 
   InitWorld;
   InitAll;
@@ -499,10 +505,11 @@ BEGIN
     ShowMessage("You don't have that key."); GoMenu(0); RETURN
   END;
   IF UseKeyOnDoor(actors[0].absX, actors[0].absY, keyIdx + 1) THEN
-    DEC(brothers[activeBrother].stuff[16 + keyIdx])
+    DEC(brothers[activeBrother].stuff[16 + keyIdx]);
+    ShowMessage("It opened.")
   ELSE
     TreasureName(16 + keyIdx, nameBuf);
-    Assign("% tried a ", msgBuf);
+    Assign("% tried ", msgBuf);
     Concat(msgBuf, nameBuf, msgBuf);
     Concat(msgBuf, " but it didn't fit.", msgBuf);
     ShowMessage(msgBuf)
@@ -761,6 +768,117 @@ BEGIN
   ShowMessage("Nobody seems to hear.")
 END HandleYell;
 
+(* --- Witch eye beam update ---
+   Original: fmain.c lines 3270-3287. Beam sweeps toward player,
+   deals 1-2 damage when player is inside the beam arc and within 100px. *)
+
+(* Direction vectors for swan velocity — original xDir/yDir values *)
+PROCEDURE NewXDir(d: INTEGER): INTEGER;
+BEGIN
+  CASE d OF
+    0: RETURN  0 | 1: RETURN  2 | 2: RETURN  2 | 3: RETURN  2 |
+    4: RETURN  0 | 5: RETURN -2 | 6: RETURN -2 | 7: RETURN -2
+  ELSE RETURN 0
+  END
+END NewXDir;
+
+PROCEDURE NewYDir(d: INTEGER): INTEGER;
+BEGIN
+  CASE d OF
+    0: RETURN -2 | 1: RETURN -2 | 2: RETURN  0 | 3: RETURN  2 |
+    4: RETURN  2 | 5: RETURN  2 | 6: RETURN  0 | 7: RETURN -2
+  ELSE RETURN 0
+  END
+END NewYDir;
+
+PROCEDURE UpdateWitch;
+VAR i, dx, dy, dist, rng, pAngle, aDiff: INTEGER;
+BEGIN
+  (* Check if witch (race 9, TypeSetfig) is on screen *)
+  witchFlag := FALSE;
+  FOR i := 1 TO actorCount - 1 DO
+    IF (actors[i].actorType = TypeSetfig) AND
+       (actors[i].race = 9) AND
+       (actors[i].state # StDead) AND
+       (actors[i].state # StDying) THEN
+      witchFlag := TRUE;
+      dx := actors[0].absX - actors[i].absX;
+      dy := actors[0].absY - actors[i].absY;
+      IF dx < 0 THEN dist := -dx ELSE dist := dx END;
+      IF dy < 0 THEN
+        IF -dy > dist THEN dist := -dy END
+      ELSE
+        IF dy > dist THEN dist := dy END
+      END;
+
+      (* Face the player — original set_course(i, hero_x, hero_y, 0) *)
+      IF (dx > 3) AND (dy < -3) THEN actors[i].facing := 1
+      ELSIF (dx > 3) AND (dy > 3) THEN actors[i].facing := 3
+      ELSIF (dx < -3) AND (dy > 3) THEN actors[i].facing := 5
+      ELSIF (dx < -3) AND (dy < -3) THEN actors[i].facing := 7
+      ELSIF dx > 3 THEN actors[i].facing := 2
+      ELSIF dx < -3 THEN actors[i].facing := 6
+      ELSIF dy < -3 THEN actors[i].facing := 0
+      ELSIF dy > 3 THEN actors[i].facing := 4
+      END;
+
+      (* Rotate beam toward player — change direction ~12% of frames.
+         Original: rand4()==0 (25%) but our frame rate is higher so slow it down. *)
+      witchRng := witchRng * 1103515245 + 12345;
+      IF witchRng < 0 THEN witchRng := -witchRng END;
+      IF (witchRng DIV 65536) MOD 8 = 0 THEN
+        IF witchS1 > 0 THEN witchDir := -1
+        ELSE witchDir := 1 END
+      END;
+      (* Rotate every other frame for slower sweep *)
+      IF BAND(CARDINAL(cycle), 1) = 0 THEN
+        INC(witchIndex, witchDir);
+        IF witchIndex > 63 THEN witchIndex := 0
+        ELSIF witchIndex < 0 THEN witchIndex := 63
+        END
+      END;
+
+      (* Damage if player inside beam arc and within 100px.
+         Compute player angle from witch and compare to beam angle.
+         Each witchIndex step = 360/64 = 5.6 degrees. Allow +-2 steps. *)
+      IF dist < 100 THEN
+        (* Approximate player angle from witch, mapped to 0-63.
+           witchpoints[0]=(0,100)=S, [8]=(70,70)=SE, [16]=(100,0)=E,
+           [24]=(70,-71)=NE, [32]=(0,-100)=N, [40]=(-71,-71)=NW,
+           [48]=(-100,0)=W, [56]=(-71,70)=SW *)
+        IF (dx = 0) AND (dy = 0) THEN
+          pAngle := witchIndex  (* on top of witch = always hit *)
+        ELSIF (dx > 3) AND (dy > 3) THEN pAngle := 8    (* SE *)
+        ELSIF (dx > 3) AND (dy < -3) THEN pAngle := 24  (* NE *)
+        ELSIF (dx < -3) AND (dy < -3) THEN pAngle := 40 (* NW *)
+        ELSIF (dx < -3) AND (dy > 3) THEN pAngle := 56  (* SW *)
+        ELSIF dx > 3 THEN pAngle := 16   (* E *)
+        ELSIF dx < -3 THEN pAngle := 48  (* W *)
+        ELSIF dy > 3 THEN pAngle := 0    (* S *)
+        ELSE pAngle := 32                (* N *)
+        END;
+        (* Check if beam angle is within +-4 steps of player angle *)
+        aDiff := (witchIndex - pAngle + 64) MOD 64;
+        IF aDiff > 32 THEN aDiff := 64 - aDiff END;
+        IF aDiff < 5 THEN
+          IF BAND(CARDINAL(cycle), 7) = 0 THEN
+            witchRng := witchRng * 1103515245 + 12345;
+            IF witchRng < 0 THEN witchRng := -witchRng END;
+            rng := (witchRng DIV 65536) MOD 2 + 1;
+            DEC(actors[0].vitality, rng);
+            IF actors[0].vitality <= 0 THEN
+              actors[0].vitality := 0;
+              actors[0].state := StDying;
+              actors[0].tactic := 7
+            END
+          END
+        END
+      END;
+      RETURN  (* only one witch *)
+    END
+  END
+END UpdateWitch;
+
 PROCEDURE CheckEnvironment;
 VAR sec: INTEGER;
 BEGIN
@@ -771,7 +889,7 @@ BEGIN
      When environ reaches 30 in sector 181, teleport to underground
      instead of drowning. xfer(0x1080, 34950, FALSE) = (4224, 34950). *)
   IF actors[0].environ = 30 THEN
-    sec := GetSectorByte(actors[0].absX, actors[0].absY);
+    sec := GetMapSector(actors[0].absX, actors[0].absY);
     IF sec = 181 THEN
       actors[0].environ := 0;
       actors[0].absX := 4224;
@@ -1003,6 +1121,35 @@ BEGIN
     ELSE ShowMessage("No food!"); potionCooldown := 30 END
   END;
   IF input.talk AND (potionCooldown = 0) THEN HandleTalk; potionCooldown := 30 END;
+  (* Swan flight — velocity-based movement, bypasses all terrain.
+     Original fmain.c:2031-2053: environ==-2 path. *)
+  IF riding = RideSwan THEN
+    actors[0].environ := -2;  (* airborne — set every frame *)
+    IF input.attack THEN
+      swanDismount := TRUE
+    ELSIF input.dirKey # DirNone THEN
+      (* Accelerate in facing direction.
+         Original: nvx = vel_x + newx(20,d,2)-20 = vel_x + xDir[d]
+         Velocity capped at +-32 (X) and +-40 (Y). *)
+      actors[0].facing := input.dirKey;
+      INC(actors[0].velX, NewXDir(input.dirKey));
+      INC(actors[0].velY, NewYDir(input.dirKey));
+      IF actors[0].velX > 32 THEN actors[0].velX := 32
+      ELSIF actors[0].velX < -32 THEN actors[0].velX := -32 END;
+      IF actors[0].velY > 40 THEN actors[0].velY := 40
+      ELSIF actors[0].velY < -40 THEN actors[0].velY := -40 END;
+      actors[0].state := StWalking
+    END;
+    (* Apply velocity — no terrain check, fly over everything *)
+    actors[0].absX := actors[0].absX + actors[0].velX DIV 4;
+    actors[0].absY := actors[0].absY + actors[0].velY DIV 4;
+    (* Clamp to world bounds *)
+    IF actors[0].absX < 0 THEN actors[0].absX := 0; actors[0].velX := 0 END;
+    IF actors[0].absY < 0 THEN actors[0].absY := 0; actors[0].velY := 0 END;
+    IF actors[0].absX > 32767 THEN actors[0].absX := 32767; actors[0].velX := 0 END;
+    IF actors[0].absY > 40959 THEN actors[0].absY := 40959; actors[0].velY := 0 END;
+    RETURN
+  END;
   IF input.attack THEN
     IF (actors[0].weapon >= 4) AND (actors[0].state # StShoot1) THEN
       IF (actors[0].weapon = 4) AND
@@ -1053,15 +1200,31 @@ BEGIN
     actors[0].absX := newX; actors[0].absY := newY;
     IF newReg >= 0 THEN RestoreDoorTiles; SwitchRegion(newReg)
     ELSE RestoreDoorTiles; SwitchRegion(DetectRegion(newX, newY)) END;
-    (* Original xfer: while(proxcheck(hero_x,hero_y,0)) hero_y++
-       Nudge player out of impassable terrain after region transition.
-       Terrain 1 = rock, >= 10 = walls/doors. Max 32px nudge. *)
-    newX := 0;
+    (* Nudge player out of impassable terrain — try all 4 directions.
+       Terrain 1 = rock/trees, >= 10 = walls/doors. *)
     newReg := GetTerrainAt(actors[0].absX, actors[0].absY);
-    WHILE ((newReg = 1) OR (newReg >= 10)) AND (newX < 32) DO
-      INC(actors[0].absY);
-      INC(newX);
-      newReg := GetTerrainAt(actors[0].absX, actors[0].absY)
+    IF (newReg = 1) OR (newReg >= 10) THEN
+      FOR newX := 1 TO 16 DO
+        newReg := GetTerrainAt(actors[0].absX, actors[0].absY - newX);
+        IF (newReg # 1) AND (newReg < 10) THEN
+          DEC(actors[0].absY, newX); newX := 16
+        ELSE
+          newReg := GetTerrainAt(actors[0].absX, actors[0].absY + newX);
+          IF (newReg # 1) AND (newReg < 10) THEN
+            INC(actors[0].absY, newX); newX := 16
+          ELSE
+            newReg := GetTerrainAt(actors[0].absX + newX, actors[0].absY);
+            IF (newReg # 1) AND (newReg < 10) THEN
+              INC(actors[0].absX, newX); newX := 16
+            ELSE
+              newReg := GetTerrainAt(actors[0].absX - newX, actors[0].absY);
+              IF (newReg # 1) AND (newReg < 10) THEN
+                DEC(actors[0].absX, newX); newX := 16
+              END
+            END
+          END
+        END
+      END
     END;
     InitPlace(actors[0].absX, actors[0].absY, currentRegion);
     doorCooldown := 60
@@ -1147,6 +1310,7 @@ BEGIN
   END;
   UpdatePlace(actors[0].absX, actors[0].absY, currentRegion);
   MaterializeNPCs(actors[0].absX, actors[0].absY, currentRegion);
+  UpdateWitch;
   UpdateDayNight;
   UpdateSleep;
   CheckBedTile;

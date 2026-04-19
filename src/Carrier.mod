@@ -171,18 +171,49 @@ BEGIN
 END UpdateTurtleCarrier;
 
 (* Update swan carrier *)
+PROCEDURE IsFireyDeath(): BOOLEAN;
+(* Original: fiery_death = map_x > 8802 && map_x < 13562 &&
+   map_y > 24744 && map_y < 29544.
+   Plain of Grief / lava zone — swan can't land here. *)
+BEGIN
+  RETURN (camX > 8802) AND (camX < 13562) AND
+         (camY > 24744) AND (camY < 29544)
+END IsFireyDeath;
+
 PROCEDURE UpdateSwanCarrier;
+VAR terrain, yt: INTEGER;
 BEGIN
   IF activeCarrier # 11 THEN RETURN END;
 
   IF riding = RideSwan THEN
-    (* Riding swan — follows player exactly *)
+    (* Riding swan — follows player, faces same direction *)
     actors[CarrierSlot].absX := actors[0].absX;
     actors[CarrierSlot].absY := actors[0].absY;
+    actors[CarrierSlot].facing := actors[0].facing;
 
-    (* Dismount: player nearly stopped + has clear space *)
-    (* For now, dismount when player presses a key or stops *)
-    (* TODO: proper dismount with space check *)
+    (* Airborne — prevents sinking and enemy melee *)
+    actors[0].environ := -2;
+
+    (* Dismount: original triggers when player nearly stopped and
+       presses button. We use swanDismount flag set by GameState
+       on attack press. Only land on passable non-water terrain. *)
+    IF swanDismount THEN
+      swanDismount := FALSE;
+      IF IsFireyDeath() THEN
+        (* can't land in lava *)
+      ELSE
+        yt := actors[0].absY - 14;
+        terrain := GetTerrainAt(actors[0].absX, yt);
+        IF (terrain # 1) AND (terrain < 4) THEN
+          riding := RideNone;
+          actors[0].absY := yt;
+          actors[0].environ := 0;
+          actors[0].velX := 0;
+          actors[0].velY := 0;
+          actors[0].state := StStill
+        END
+      END
+    END
   ELSE
     (* Not riding — check if player near swan with lasso *)
     IF HasStuff(StLasso) THEN
@@ -274,10 +305,21 @@ BEGIN
   CheckSwanExtent;
   IF activeCarrier = 5 THEN UpdateTurtleCarrier
   ELSIF activeCarrier = 11 THEN UpdateSwanCarrier
+  ELSIF (riding = RideSwan) THEN
+    (* Swan rider but activeCarrier cleared by extent reset.
+       Re-activate so carrier position follows player. *)
+    activeCarrier := 11;
+    UpdateSwanCarrier
+  ELSIF (actors[CarrierSlot].actorType = TypeCarrier) AND
+        (actors[CarrierSlot].race = 5) AND
+        (actors[CarrierSlot].vitality > 0) THEN
+    (* Turtle exists but activeCarrier was cleared by extent reset. *)
+    activeCarrier := 5;
+    UpdateTurtleCarrier
   END;
 
-  (* Prevent sinking while riding *)
-  IF riding # RideNone THEN
+  (* Prevent sinking while riding — but swan is airborne (environ=-2) *)
+  IF (riding # RideNone) AND (riding # RideSwan) THEN
     actors[0].environ := 0
   END
 END UpdateCarriers;
@@ -352,5 +394,6 @@ END UpdateDragon;
 BEGIN
   dragonSpawned := FALSE;
   dragonFire := FALSE;
+  swanDismount := FALSE;
   dragonRng := 31337
 END Carrier.

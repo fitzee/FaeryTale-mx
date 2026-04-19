@@ -25,5 +25,6 @@ PROCEDURE UpdateDragon;   (* dragon AI — sets dragonFire flag *)
 
 VAR
   dragonFire: BOOLEAN;    (* TRUE = dragon wants to fire this frame *)
+  swanDismount: BOOLEAN;  (* TRUE = player wants to dismount swan *)
 
 END Carrier.

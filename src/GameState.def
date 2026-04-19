@@ -21,6 +21,10 @@ VAR
   fairyActive: BOOLEAN;
   fairyX: INTEGER;  (* fairy screen X in world coords *)
   colorPlayTimer: INTEGER;  (* >0 = color cycling effect active *)
+  witchFlag: BOOLEAN;       (* TRUE when witch is active on screen *)
+  witchIndex: INTEGER;      (* beam rotation angle 0-255 wraps *)
+  witchDir: INTEGER;        (* beam rotation direction +1 or -1 *)
+  witchS1, witchS2: INTEGER; (* cross-product signs for beam hit detection *)
 
 PROCEDURE InitGame;
 PROCEDURE UpdateGame;

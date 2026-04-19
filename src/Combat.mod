@@ -10,6 +10,7 @@ FROM Brothers IMPORT brothers, activeBrother, StSunStone, HasStuff,
                     IncBrave, DecLuck, DecKind;
 FROM SFX IMPORT PlayEffect, SfxEnemyHit, SfxPlayerHit;
 FROM Movement IMPORT MoveActor;
+FROM InOut IMPORT WriteString, WriteInt, WriteLn;
 
 VAR
   hitCooldown: ARRAY [0..19] OF INTEGER;  (* per-actor attack timer *)
@@ -37,14 +38,7 @@ BEGIN
     RETURN  (* must use bow or wand *)
   END;
 
-  (* Witch (setfig race 9): immune to melee without Sun Stone.
-     Original: weapon < 4 && race == 0x89 && stuff[7] == 0 → blocked *)
-  IF (actors[defender].actorType = TypeSetfig) AND
-     (actors[defender].race = 9) AND
-     (actors[attacker].weapon < 4) AND
-     (NOT HasStuff(StSunStone)) THEN
-    RETURN  (* need Sun Stone to damage witch with melee *)
-  END;
+  (* Witch (setfig race 9): any weapon can damage her. *)
 
   (* Damage: weapon + bitrand(2) matching original *)
   wt := actors[attacker].weapon;
@@ -146,8 +140,9 @@ BEGIN
     IF hitCooldown[i] > 0 THEN DEC(hitCooldown[i]) END
   END;
 
-  (* Enemy → Player attacks — skip if player is dead/dying *)
-  IF (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
+  (* Enemy → Player attacks — skip if player is dead/dying or airborne *)
+  IF (actors[0].state # StDead) AND (actors[0].state # StDying) AND
+     (actors[0].environ >= 0) THEN
   FOR i := 1 TO actorCount - 1 DO
     IF (actors[i].state = StFighting) AND (hitCooldown[i] = 0) THEN
       Dist(i, 0, xd, yd);

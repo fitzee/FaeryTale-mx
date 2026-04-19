@@ -230,8 +230,9 @@ BEGIN
   actors[actorIdx].absX := xTest;
   actors[actorIdx].absY := yTest;
 
-  (* Update environ from terrain at new position *)
-  IF currentRegion >= 0 THEN
+  (* Update environ from terrain at new position — skip for swan rider *)
+  IF (currentRegion >= 0) AND
+     NOT ((actorIdx = 0) AND (riding = RideSwan)) THEN
     terrCode := GetTerrainAt(actors[actorIdx].absX, actors[actorIdx].absY);
     actors[actorIdx].environ := UpdateEnviron(terrCode, actors[actorIdx].environ)
   END;

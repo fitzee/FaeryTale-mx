@@ -54,6 +54,7 @@ BEGIN
       ELSIF kc = ORD('0') THEN inp.menuKey := '0'
       ELSIF kc = ORD('9') THEN inp.menuKey := '9'
       ELSIF kc = ORD('8') THEN inp.menuKey := '8'
+      ELSIF kc = 27 THEN inp.menuKey := CHR(27)  (* ESC *)
       ELSIF (kc >= ORD('a')) AND (kc <= ORD('z')) THEN
         inp.menuKey := CAP(CHR(kc))
       END

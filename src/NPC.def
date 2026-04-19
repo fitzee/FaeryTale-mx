@@ -12,6 +12,7 @@ CONST
 PROCEDURE GetSetfigSprite(race: INTEGER; VAR bank, frame: INTEGER);
 
 PROCEDURE InitNPCs;
+PROCEDURE ResetMaterialized;
 
 (* Materialize nearby status=3 WorldObj entries as live SETFIG actors.
    Call each frame after camera/region updates. *)

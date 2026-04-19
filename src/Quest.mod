@@ -8,6 +8,7 @@ FROM Actor IMPORT actors, actorCount;
 FROM Brothers IMPORT brothers, activeBrother, AddWealth;
 FROM Assets IMPORT currentRegion, SwitchRegion, DetectRegion, GetTerrainAt;
 FROM Narration IMPORT InitPlace;
+FROM NPC IMPORT ResetMaterialized;
 FROM WorldObj IMPORT objects, objCount;
 FROM HudLog IMPORT AddLogLine;
 FROM BinaryIO IMPORT OpenRead, OpenWrite, Close, ReadBytes, WriteBytes, Done;
@@ -123,6 +124,10 @@ BEGIN
   WriteBytes(fd, ADR(actors[0].weapon), 4, n);
   WriteBytes(fd, ADR(actors[0].facing), 4, n);
 
+  (* Current region *)
+  v := currentRegion;
+  WriteBytes(fd, ADR(v), 4, n);
+
   (* Princess state *)
   v := 0; IF princessRescued THEN v := 1 END;
   WriteBytes(fd, ADR(v), 4, n);
@@ -179,6 +184,13 @@ BEGIN
   ReadBytes(fd, ADR(actors[0].weapon), 4, n);
   ReadBytes(fd, ADR(actors[0].facing), 4, n);
 
+  (* Current region — added after facing in save format *)
+  ReadBytes(fd, ADR(v), 4, n);
+  IF (n >= 4) AND (v >= 0) AND (v <= 9) THEN
+    (* New save format with region *)
+    SwitchRegion(v)
+  END;
+
   (* Princess state *)
   ReadBytes(fd, ADR(v), 4, n);
   princessRescued := (v # 0);
@@ -190,8 +202,8 @@ BEGIN
   actors[0].environ := 0;
   actorCount := 1;
 
-  (* Detect and switch to the correct region for loaded position *)
-  SwitchRegion(DetectRegion(actors[0].absX, actors[0].absY));
+  (* Reset NPC materialization flags — actors were wiped on load *)
+  ResetMaterialized;
   (* Nudge out of blocked terrain if stuck — try small offsets.
      Terrain 1 = rock, >= 10 = walls/doors — both block movement. *)
   v := GetTerrainAt(actors[0].absX, actors[0].absY);

@@ -251,7 +251,8 @@ BEGIN
     'B': GoMenu(MBuy) |
     'K': GoMenu(MKeys) |
     'V': GoMenu(MSave) |
-    'X': GoMenu(MSave)
+    'X': GoMenu(MSave) |
+    CHR(27): GoMenu(MItems)  (* ESC — return to top-level menu *)
   ELSE
   END
 END HandleMenuKey;

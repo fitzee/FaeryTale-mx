@@ -159,7 +159,7 @@ BEGIN
             actors[idx].race := race;
             actors[idx].state := StStill;
             actors[idx].goal := seq;
-            actors[idx].vitality := 999;
+            actors[idx].vitality := 2 + race + race;  (* original: 2+id+id *)
             actors[idx].weapon := 0;
             actors[idx].facing := 4;  (* south by default *)
             actors[idx].visible := TRUE;
@@ -371,10 +371,16 @@ BEGIN
   END
 END GetSpeech;
 
+PROCEDURE ResetMaterialized;
+VAR i: INTEGER;
+BEGIN
+  FOR i := 0 TO 199 DO materialized[i] := FALSE END
+END ResetMaterialized;
+
 PROCEDURE InitNPCs;
 VAR i: INTEGER;
 BEGIN
-  FOR i := 0 TO 199 DO materialized[i] := FALSE END;
+  ResetMaterialized;
   priestStatueGiven := FALSE;
   sorceressVisited := FALSE;
   rng := 99991;

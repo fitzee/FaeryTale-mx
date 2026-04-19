@@ -13,5 +13,6 @@ PROCEDURE DrawRegionFade;
 PROCEDURE DrawMessage;
 PROCEDURE DrawInventory;
 PROCEDURE DrawFairy;
+PROCEDURE DrawWitchBeam;
 
 END Render.

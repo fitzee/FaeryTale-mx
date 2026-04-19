@@ -7,7 +7,8 @@ FROM Texture IMPORT Draw AS TexDraw, DrawRegion AS TexDrawRegion,
                     Width AS TexWidth, Height AS TexHeight,
                     SetColorMod;
 FROM InOut IMPORT WriteString, WriteInt, WriteLn;
-FROM Canvas IMPORT SetColor, FillRect, DrawRect, SetClip, ClearClip;
+FROM Canvas IMPORT SetColor, FillRect, DrawRect, SetClip, ClearClip,
+                   FillTriangle, SetBlendMode, BLEND_ADD, BLEND_NONE;
 FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
                   TerrGrass, TerrWater, TerrForest,
                   TerrMountain, TerrPath, TerrWall, TerrDoor,
@@ -19,7 +20,8 @@ FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
                   ItemShield, ItemPotion, ItemGem, ItemScroll;
 FROM GameState IMPORT cycle, msgText, msgTimer, regionFade,
-                     fairyActive, fairyX, colorPlayTimer;
+                     fairyActive, fairyX, colorPlayTimer,
+                     witchFlag, witchIndex, witchS1, witchS2;
 FROM DayNight IMPORT brightness, isNight, lightlevel, GetFadeRGB,
                      PaletteTickDue;
 FROM Brothers IMPORT activeBrother, brothers, Julian, Philip, Kevin;
@@ -53,6 +55,7 @@ BEGIN
   cpRng := 77777;
   wpnInited := FALSE;
   bowInited := FALSE;
+  witchInited := FALSE;
   compassBase := NIL;
   compassHi := NIL;
   UpdateFade
@@ -900,7 +903,18 @@ BEGIN
      Original: king (race 5) and sorceress (race 7) skip masking entirely
      (fmain.c:3578 — goto nomask for race 0x85, 0x87). *)
   IF actors[i].actorType = TypeSetfig THEN
+    (* Dead setfigs don't render *)
+    IF actors[i].state = StDead THEN RETURN END;
     GetSetfigSprite(actors[i].race, npcBank, npcFrame);
+    (* Witch (race 9): animated — frame = facing / 2. Original line 1993.
+       Dying: use last frame. *)
+    IF actors[i].race = 9 THEN
+      IF actors[i].state = StDying THEN
+        npcFrame := 7  (* death frame — last in sheet *)
+      ELSE
+        npcFrame := actors[i].facing DIV 2
+      END
+    END;
     IF (npcBank >= 0) AND (npcBank <= 4) AND (npcTex[npcBank] # NIL) THEN
       SetColorMod(npcTex[npcBank], fadeR, fadeG, fadeB);
       IF (actors[i].race = 5) OR (actors[i].race = 7) THEN
@@ -964,9 +978,11 @@ BEGIN
                       sx - S(16), sy - S(16), S(32), S(32))
       END
     ELSIF actors[i].race = 11 THEN
-      (* Swan/Bird: frame based on facing, 64x64 *)
+      (* Swan/Bird: 8 frames, 1 per direction, 64x64.
+         Sheet order: NW,N,NE,E,SE,S,SW,W — same as turtle.
+         Remap: (facing + 1) MOD 8 *)
       IF birdTex # NIL THEN
-        frame := actors[i].facing MOD 8;
+        frame := (actors[i].facing + 1) MOD 8;
         SetColorMod(birdTex, fadeR, fadeG, fadeB);
         DrawTexRegion(birdTex, 0, frame * 64, 64, 64,
                       sx - S(32), sy - S(32), S(64), S(64))
@@ -1417,6 +1433,149 @@ BEGIN
   DrawTexRegion(objTex, 0, sprY, 16, 16,
                 sx - S(8), sy - S(8), S(16), S(16))
 END DrawFairy;
+
+(* --- Witch eye beam --- *)
+
+VAR
+  wpX, wpY: ARRAY [0..63] OF INTEGER;  (* beam far endpoints *)
+  wpNX, wpNY: ARRAY [0..63] OF INTEGER;  (* beam near endpoints *)
+  witchInited: BOOLEAN;
+
+PROCEDURE InitWitchPoints;
+BEGIN
+  wpX[0]:=0;   wpY[0]:=100;  wpNX[0]:=0;   wpNY[0]:=10;
+  wpX[1]:=9;   wpY[1]:=99;   wpNX[1]:=0;   wpNY[1]:=9;
+  wpX[2]:=19;  wpY[2]:=98;   wpNX[2]:=1;   wpNY[2]:=9;
+  wpX[3]:=29;  wpY[3]:=95;   wpNX[3]:=2;   wpNY[3]:=9;
+  wpX[4]:=38;  wpY[4]:=92;   wpNX[4]:=3;   wpNY[4]:=9;
+  wpX[5]:=47;  wpY[5]:=88;   wpNX[5]:=4;   wpNY[5]:=8;
+  wpX[6]:=55;  wpY[6]:=83;   wpNX[6]:=5;   wpNY[6]:=8;
+  wpX[7]:=63;  wpY[7]:=77;   wpNX[7]:=6;   wpNY[7]:=7;
+  wpX[8]:=70;  wpY[8]:=70;   wpNX[8]:=7;   wpNY[8]:=7;
+  wpX[9]:=77;  wpY[9]:=63;   wpNX[9]:=7;   wpNY[9]:=6;
+  wpX[10]:=83; wpY[10]:=55;  wpNX[10]:=8;  wpNY[10]:=5;
+  wpX[11]:=88; wpY[11]:=47;  wpNX[11]:=8;  wpNY[11]:=4;
+  wpX[12]:=92; wpY[12]:=38;  wpNX[12]:=9;  wpNY[12]:=3;
+  wpX[13]:=95; wpY[13]:=29;  wpNX[13]:=9;  wpNY[13]:=2;
+  wpX[14]:=98; wpY[14]:=19;  wpNX[14]:=9;  wpNY[14]:=1;
+  wpX[15]:=99; wpY[15]:=9;   wpNX[15]:=9;  wpNY[15]:=0;
+  wpX[16]:=100; wpY[16]:=0;  wpNX[16]:=10; wpNY[16]:=0;
+  wpX[17]:=99; wpY[17]:=-10; wpNX[17]:=9;  wpNY[17]:=-1;
+  wpX[18]:=98; wpY[18]:=-20; wpNX[18]:=9;  wpNY[18]:=-2;
+  wpX[19]:=95; wpY[19]:=-30; wpNX[19]:=9;  wpNY[19]:=-3;
+  wpX[20]:=92; wpY[20]:=-39; wpNX[20]:=9;  wpNY[20]:=-4;
+  wpX[21]:=88; wpY[21]:=-48; wpNX[21]:=8;  wpNY[21]:=-5;
+  wpX[22]:=83; wpY[22]:=-56; wpNX[22]:=8;  wpNY[22]:=-6;
+  wpX[23]:=77; wpY[23]:=-64; wpNX[23]:=7;  wpNY[23]:=-7;
+  wpX[24]:=70; wpY[24]:=-71; wpNX[24]:=7;  wpNY[24]:=-8;
+  wpX[25]:=63; wpY[25]:=-78; wpNX[25]:=6;  wpNY[25]:=-8;
+  wpX[26]:=55; wpY[26]:=-84; wpNX[26]:=5;  wpNY[26]:=-9;
+  wpX[27]:=47; wpY[27]:=-89; wpNX[27]:=4;  wpNY[27]:=-9;
+  wpX[28]:=38; wpY[28]:=-93; wpNX[28]:=3;  wpNY[28]:=-10;
+  wpX[29]:=29; wpY[29]:=-96; wpNX[29]:=2;  wpNY[29]:=-10;
+  wpX[30]:=19; wpY[30]:=-99; wpNX[30]:=1;  wpNY[30]:=-10;
+  wpX[31]:=9;  wpY[31]:=-100;wpNX[31]:=0;  wpNY[31]:=-10;
+  wpX[32]:=0;  wpY[32]:=-100;wpNX[32]:=0;  wpNY[32]:=-10;
+  wpX[33]:=-10;wpY[33]:=-100;wpNX[33]:=-1; wpNY[33]:=-10;
+  wpX[34]:=-20;wpY[34]:=-99; wpNX[34]:=-2; wpNY[34]:=-10;
+  wpX[35]:=-30;wpY[35]:=-96; wpNX[35]:=-3; wpNY[35]:=-10;
+  wpX[36]:=-39;wpY[36]:=-93; wpNX[36]:=-4; wpNY[36]:=-10;
+  wpX[37]:=-48;wpY[37]:=-89; wpNX[37]:=-5; wpNY[37]:=-9;
+  wpX[38]:=-56;wpY[38]:=-84; wpNX[38]:=-6; wpNY[38]:=-9;
+  wpX[39]:=-64;wpY[39]:=-78; wpNX[39]:=-7; wpNY[39]:=-8;
+  wpX[40]:=-71;wpY[40]:=-71; wpNX[40]:=-8; wpNY[40]:=-8;
+  wpX[41]:=-78;wpY[41]:=-64; wpNX[41]:=-8; wpNY[41]:=-7;
+  wpX[42]:=-84;wpY[42]:=-56; wpNX[42]:=-9; wpNY[42]:=-6;
+  wpX[43]:=-89;wpY[43]:=-48; wpNX[43]:=-9; wpNY[43]:=-5;
+  wpX[44]:=-93;wpY[44]:=-39; wpNX[44]:=-10;wpNY[44]:=-4;
+  wpX[45]:=-96;wpY[45]:=-30; wpNX[45]:=-10;wpNY[45]:=-3;
+  wpX[46]:=-99;wpY[46]:=-20; wpNX[46]:=-10;wpNY[46]:=-2;
+  wpX[47]:=-100;wpY[47]:=-10;wpNX[47]:=-10;wpNY[47]:=-1;
+  wpX[48]:=-100;wpY[48]:=-1; wpNX[48]:=-10;wpNY[48]:=-1;
+  wpX[49]:=-100;wpY[49]:=9;  wpNX[49]:=-10;wpNY[49]:=0;
+  wpX[50]:=-99;wpY[50]:=19;  wpNX[50]:=-10;wpNY[50]:=1;
+  wpX[51]:=-96;wpY[51]:=29;  wpNX[51]:=-10;wpNY[51]:=2;
+  wpX[52]:=-93;wpY[52]:=38;  wpNX[52]:=-10;wpNY[52]:=3;
+  wpX[53]:=-89;wpY[53]:=47;  wpNX[53]:=-9; wpNY[53]:=4;
+  wpX[54]:=-84;wpY[54]:=55;  wpNX[54]:=-9; wpNY[54]:=5;
+  wpX[55]:=-78;wpY[55]:=63;  wpNX[55]:=-8; wpNY[55]:=6;
+  wpX[56]:=-71;wpY[56]:=70;  wpNX[56]:=-8; wpNY[56]:=7;
+  wpX[57]:=-64;wpY[57]:=77;  wpNX[57]:=-7; wpNY[57]:=7;
+  wpX[58]:=-56;wpY[58]:=83;  wpNX[58]:=-6; wpNY[58]:=8;
+  wpX[59]:=-48;wpY[59]:=88;  wpNX[59]:=-5; wpNY[59]:=8;
+  wpX[60]:=-39;wpY[60]:=92;  wpNX[60]:=-4; wpNY[60]:=9;
+  wpX[61]:=-30;wpY[61]:=95;  wpNX[61]:=-3; wpNY[61]:=9;
+  wpX[62]:=-20;wpY[62]:=98;  wpNX[62]:=-2; wpNY[62]:=9;
+  wpX[63]:=-10;wpY[63]:=99;  wpNX[63]:=-1; wpNY[63]:=9;
+  witchInited := TRUE
+END InitWitchPoints;
+
+PROCEDURE DrawWitchBeam;
+(* Original witch_fx: draws XOR quadrilateral from witch's eyes.
+   Two edges at witchIndex-1 and witchIndex+1, each with near/far points.
+   SDL2: use BLEND_ADD with green color for glow effect. *)
+VAR i, wx, wy: INTEGER;
+    a1, a2: INTEGER;
+    x1, y1, x2, y2, x3, y3, x4, y4: INTEGER;
+    dx, dy, dx1, dy1, hx, hy: INTEGER;
+BEGIN
+  IF NOT witchFlag THEN RETURN END;
+  IF NOT witchInited THEN InitWitchPoints END;
+
+  (* Find witch actor *)
+  FOR i := 1 TO actorCount - 1 DO
+    IF (actors[i].actorType = TypeSetfig) AND
+       (actors[i].race = 9) AND
+       (actors[i].state # StDead) THEN
+      (* Witch screen position — centered on eyes, 15px up from feet *)
+      wx := (actors[i].absX - camX) * Scale;
+      wy := (actors[i].absY - 15 - camY) * Scale;
+
+      (* Two beam edges: witchIndex-1 and witchIndex+1 *)
+      a1 := (witchIndex + 63) MOD 64;
+      a2 := (witchIndex + 1) MOD 64;
+
+      (* Edge 1: near and far points *)
+      x1 := wx + wpX[a1] * Scale;
+      y1 := wy + wpY[a1] * Scale;
+      x2 := wx + wpNX[a1] * Scale;
+      y2 := wy + wpNY[a1] * Scale;
+
+      (* Edge 2: near and far points *)
+      x3 := wx + wpX[a2] * Scale;
+      y3 := wy + wpY[a2] * Scale;
+      x4 := wx + wpNX[a2] * Scale;
+      y4 := wy + wpNY[a2] * Scale;
+
+      (* Cross product for hit detection — original s1/s2.
+         s1: which side of edge 1 is the hero?
+         s2: which side of edge 2 is the hero? *)
+      hx := (actors[0].absX - camX) * Scale;
+      hy := (actors[0].absY - camY) * Scale;
+
+      dx := x1 - x2;  dy := y1 - y2;
+      dx1 := hx - x2; dy1 := hy - y2;
+      witchS1 := dx * dy1 - dy * dx1;
+
+      dx := x3 - x4;  dy := y3 - y4;
+      dx1 := hx - x4; dy1 := hy - y4;
+      witchS2 := dx * dy1 - dy * dx1;
+
+      (* Draw beam — original uses COMPLEMENT/XOR which creates a
+         blue-white inversion effect on the Amiga palette.
+         SDL2: semi-transparent blue-white tint, see-through. *)
+      SetClip(ren, 0, 0, S(PlayW), S(PlayH));
+      SetBlendMode(ren, BLEND_ADD);
+      SetColor(ren, 30, 40, 80, 255);  (* additive blue — see-through on dark bg *)
+      FillTriangle(ren, wx, wy, x1, y1, x3, y3);
+      SetColor(ren, 20, 30, 60, 255);
+      FillTriangle(ren, wx, wy, x2, y2, x4, y4);
+      SetBlendMode(ren, BLEND_NONE);
+      ClearClip(ren);
+      RETURN
+    END
+  END
+END DrawWitchBeam;
 
 END Render.
 
