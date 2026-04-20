@@ -162,9 +162,10 @@ BEGIN
      k = 2 or k > 6: slow terrain like forest/water edge (e=1)
      k = -3: walk backwards (e=-2, treat as 1 for now)
      else: normal (e=2) *)
-  IF k = -1 THEN RETURN 4
-  ELSIF k = -3 THEN RETURN 1
-  ELSIF (k = 2) OR (k > 6) THEN RETURN 1
+  IF k = -1 THEN RETURN 4    (* fast road *)
+  ELSIF k = -2 THEN RETURN 1  (* slippery — reduced base speed *)
+  ELSIF k = -3 THEN RETURN 2  (* backward — normal speed, direction reversed in GameState *)
+  ELSIF (k = 2) OR (k > 6) THEN RETURN 1  (* brush/water edge *)
   ELSE RETURN 2
   END
 END EnvironToSpeed;
@@ -190,6 +191,7 @@ BEGIN
     6:  RETURN -1 |  (* fast road *)
     7:  RETURN -2 |  (* slippery *)
     8:  RETURN -3 |  (* backwards *)
+    9:  RETURN -2 |  (* astral void — slippery/sliding, fall handled by GameState *)
     10: RETURN 0  |  (* blocked terrain — should not reach here *)
     15: RETURN 0  |  (* blocked terrain — should not reach here *)
     4:

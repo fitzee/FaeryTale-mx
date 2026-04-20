@@ -7,7 +7,7 @@ FROM Platform IMPORT PollInput, InputState, DirNone,
 FROM Actor IMPORT actors, actorCount, InitAll,
                   TypeEnemy, TypeSetfig,
                   StWalking, StStill, StFighting, StDead, StDying, StShoot1,
-                  StSleep,
+                  StSleep, StFall,
                   GoalAttack1, GoalFlee, GoalStand;
 FROM World IMPORT InitWorld, TileSize, WorldW, WorldH, UpdateCamera,
                   GetTerrain, TerrSwamp, TerrWater, camX, camY;
@@ -42,7 +42,7 @@ FROM WorldObj IMPORT CheckObjectPickup, objects, objCount, revealHidden,
                      AddObj, DistributeRegion, LeaveItem;
 FROM HudLog IMPORT AddLogLine, SetStats, InitHudLog;
 FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
-                      ActorsOnScreen, MoveExtent;
+                      ActorsOnScreen, MoveExtent, xtype;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
                TalkToCarrier, riding, turtleEggs, turtleEggsDone,
                UpdateDragon, dragonFire, swanDismount, dismountResult,
@@ -881,10 +881,41 @@ BEGIN
 END UpdateWitch;
 
 PROCEDURE CheckEnvironment;
-VAR sec: INTEGER;
+VAR sec, terrain: INTEGER;
 BEGIN
   (* Skip if already dying/dead — original checkdead handles transition *)
   IF (actors[0].state = StDying) OR (actors[0].state = StDead) THEN RETURN END;
+
+  (* Fall state processing — original fmain.c:2265-2274.
+     Tactic counts up, velocity dampens 75%/frame, after 30 frames die. *)
+  IF actors[0].state = StFall THEN
+    INC(actors[0].tactic);
+    actors[0].velX := (actors[0].velX * 3) DIV 4;
+    actors[0].velY := (actors[0].velY * 3) DIV 4;
+    actors[0].absX := actors[0].absX + actors[0].velX DIV 4;
+    actors[0].absY := actors[0].absY + actors[0].velY DIV 4;
+    IF actors[0].tactic >= 30 THEN
+      actors[0].vitality := 0;
+      actors[0].state := StDying;
+      actors[0].tactic := 7;
+      DecLuck(2)
+    END;
+    RETURN
+  END;
+
+  (* Terrain 9 falling — original fmain.c:2311-2322.
+     Only in astral plane (xtype=52). Player falls into void. *)
+  IF (xtype = 52) AND (currentRegion >= 8) THEN
+    terrain := GetTerrainAt(actors[0].absX, actors[0].absY);
+    IF terrain = 9 THEN
+      IF actors[0].state # StFall THEN
+        actors[0].state := StFall;
+        actors[0].tactic := 0;
+        DecLuck(2);
+        SetMood(MoodBattle)
+      END
+    END
+  END;
 
   (* Original fmain.c:2340-2353 — sector 181 quicksand/whirlpool.
      When environ reaches 30 in sector 181, teleport to underground
@@ -1198,9 +1229,16 @@ BEGIN
   ELSIF (actors[0].state = StFighting) OR (actors[0].state = StShoot1) THEN
     actors[0].state := StStill; actors[0].velX := 0; actors[0].velY := 0
   ELSIF input.dirKey # DirNone THEN
-    actors[0].facing := input.dirKey;
-    IF MoveActor(0, input.dirKey, 1) THEN actors[0].state := StWalking
-    ELSE actors[0].state := StStill END
+    (* Terrain 8 (environ=-3): reversed controls — original e=-2, dex^=7 *)
+    IF actors[0].environ = -3 THEN
+      actors[0].facing := BAND(CARDINAL(input.dirKey + 4), 7);
+      IF MoveActor(0, actors[0].facing, 2) THEN actors[0].state := StWalking
+      ELSE actors[0].state := StStill END
+    ELSE
+      actors[0].facing := input.dirKey;
+      IF MoveActor(0, input.dirKey, 1) THEN actors[0].state := StWalking
+      ELSE actors[0].state := StStill END
+    END
   ELSE
     actors[0].state := StStill; actors[0].velX := 0; actors[0].velY := 0
   END

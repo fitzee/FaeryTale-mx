@@ -130,7 +130,14 @@ BEGIN
        outdoor regions update on palette tick.
        Force immediate update when transitioning outdoor to avoid flash. *)
   ELSIF currentRegion >= 8 THEN
-    fadeR := 255; fadeG := 255; fadeB := 255
+    (* Astral plane tint: blue/purple cast.
+       Original: pagecolors[31] = 0x0445 (dark purple) or 0x00f0 (blue). *)
+    IF (actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
+       (actors[0].absY > 33280) AND (actors[0].absY < 35328) THEN
+      fadeR := 140; fadeG := 140; fadeB := 255  (* blue-ish tint *)
+    ELSE
+      fadeR := 255; fadeG := 255; fadeB := 255
+    END
   ELSE
     IF (fadeR = 255) AND (fadeG = 255) AND (fadeB = 255) THEN
       UpdateFade
@@ -519,6 +526,22 @@ BEGIN
       RETURN base + 3  (* dead snake: 39, 47, 55, 63 *)
     ELSE
       RETURN base + (cycle DIV 4) MOD 2  (* alternate 0/1 *)
+    END
+  END;
+
+  (* Loraii (race 8): unique frame logic per actor index.
+     Original fmain.c:2381-2396. Three variants based on i%3.
+     Dying: frame 0x3F (63). Dead: vanish (handled elsewhere). *)
+  IF actors[i].race = 8 THEN
+    IF actors[i].state = StDying THEN RETURN 63
+    ELSIF actors[i].state = StDead THEN RETURN 63
+    ELSE
+      CASE i MOD 3 OF
+        0: RETURN 37 |  (* 0x25 — static variant *)
+        1: RETURN 40 + (cycle DIV 4) MOD 4 |  (* 0x28+ cycling *)
+        2: RETURN 48 + (cycle DIV 4) MOD 4    (* 0x30+ cycling *)
+      ELSE RETURN 37
+      END
     END
   END;
 
