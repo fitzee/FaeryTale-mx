@@ -1205,6 +1205,9 @@ BEGIN
       actors[0].environ := 0  (* stop sliding — original: k=0 *)
     END;
     RETURN
+  ELSE
+    (* Not on slippery terrain — clear any residual velocity *)
+    actors[0].velX := 0; actors[0].velY := 0
   END;
 
   (* Swan flight — velocity-based movement, bypasses all terrain.
