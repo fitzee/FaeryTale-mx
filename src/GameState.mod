@@ -901,16 +901,40 @@ BEGIN
     END
   END;
 
+  (* Original fmain.c:2434-2442 — lava/fire damage.
+     fiery_death zone: cam 8802-13562, 24744-29544.
+     environ 3-15: -1 vit/frame. environ > 15: instant death.
+     stuff[23] (Fruit) protects completely. *)
+  IF (camX > 8802) AND (camX < 13562) AND
+     (camY > 24744) AND (camY < 29544) THEN
+    IF brothers[activeBrother].stuff[24] > 0 THEN  (* Fruit = stuff[24] *)
+      (* Fruit protects from lava *)
+      actors[0].environ := 0
+    ELSIF actors[0].environ > 15 THEN
+      actors[0].vitality := 0;
+      actors[0].state := StDying;
+      actors[0].tactic := 7;
+      Event(27)  (* "% perished in the hot lava!" *)
+    ELSIF actors[0].environ > 2 THEN
+      DEC(actors[0].vitality);
+      IF actors[0].vitality <= 0 THEN
+        actors[0].vitality := 0;
+        actors[0].state := StDying;
+        actors[0].tactic := 7;
+        Event(27)
+      END
+    END
+  END;
+
   (* Original fmain.c:2444-2451 — drowning at environ 30.
-     Every 8 frames, decrement vitality. checkdead(i,6) handles death.
-     Applies in ALL regions — water is water. *)
+     Every 8 frames, decrement vitality. Event 6. *)
   IF (actors[0].environ = 30) AND (BAND(CARDINAL(cycle), 7) = 0) THEN
     DEC(actors[0].vitality);
     IF actors[0].vitality <= 0 THEN
       actors[0].vitality := 0;
       actors[0].state := StDying;
       actors[0].tactic := 7;
-      ShowMessage("% is drowning!")
+      Event(6)  (* "% was drowned in the water!" *)
     ELSIF BAND(CARDINAL(cycle), 31) = 0 THEN
       ShowMessage("% is drowning!")
     END

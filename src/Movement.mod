@@ -83,6 +83,9 @@ BEGIN
     IF t >= 8 THEN
       IF (actorIdx = 0) AND ((t = 8) OR (t = 9)) THEN
         (* player walks through swamp/palace *)
+      ELSIF (actorIdx = 0) AND (t = 12) AND
+            (brothers[activeBrother].stuff[StShard] > 0) THEN
+        (* Shard allows passing barrier *)
       ELSIF (actorIdx = 0) AND (t = 15) THEN
         OpenDoorTile(x, y);
         RETURN 15
@@ -98,6 +101,9 @@ BEGIN
       IF (actorIdx = 0) AND (t = 15) THEN
         OpenDoorTile(x, y);
         RETURN 15
+      ELSIF (actorIdx = 0) AND (t = 12) AND
+            (brothers[activeBrother].stuff[StShard] > 0) THEN
+        (* Shard allows passing barrier *)
       ELSE RETURN t
       END
     END;

@@ -755,11 +755,22 @@ BEGIN
   dstH := S(SprH);
   clipBot := 0;
 
+  (* Original fmain.c:3460-3488 — sinking/drowning visuals.
+     environ 2: clip 10px (brush). 3-29: progressive sink.
+     30+: replace with "hands up" sprites 97/98. *)
+  IF env > 29 THEN
+    (* Fully submerged — draw "hands up" sprites from objects sheet *)
+    IF objTex # NIL THEN
+      srcY := (97 + (cycle MOD 2)) * 16;
+      SetColorMod(objTex, fadeR, fadeG, fadeB);
+      DrawTexRegion(objTex, 0, srcY, 16, 8,
+                    sx - S(8), sy - S(4), S(16), S(8))
+    END;
+    RETURN
+  END;
   IF env = 2 THEN
-    (* Forest/brush: clip bottom 10 pixels of sprite — hide legs *)
     clipBot := 10
   ELSIF env > 2 THEN
-    (* Water: clip bottom by environ pixels — character sinks down *)
     clipBot := env;
     IF clipBot > SprH - 4 THEN clipBot := SprH - 4 END
   END;

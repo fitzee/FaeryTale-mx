@@ -305,9 +305,11 @@ BEGIN
   CheckSwanExtent;
   IF activeCarrier = 5 THEN UpdateTurtleCarrier
   ELSIF activeCarrier = 11 THEN UpdateSwanCarrier
-  ELSIF (riding = RideSwan) THEN
-    (* Swan rider but activeCarrier cleared by extent reset.
-       Re-activate so carrier position follows player. *)
+  ELSIF (riding = RideSwan) OR
+        ((actors[CarrierSlot].actorType = TypeCarrier) AND
+         (actors[CarrierSlot].race = 11) AND
+         (actors[CarrierSlot].vitality > 0)) THEN
+    (* Swan exists (riding or dismounted) — keep active for remount *)
     activeCarrier := 11;
     UpdateSwanCarrier
   ELSIF (actors[CarrierSlot].actorType = TypeCarrier) AND

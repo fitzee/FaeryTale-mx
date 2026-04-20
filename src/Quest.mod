@@ -2,7 +2,6 @@ IMPLEMENTATION MODULE Quest;
 
 (* Quest progression matching original FTA. *)
 
-FROM SYSTEM IMPORT ADR;
 FROM Strings IMPORT Assign, Concat;
 FROM Actor IMPORT actors, actorCount;
 FROM Brothers IMPORT brothers, activeBrother, AddWealth;
@@ -11,7 +10,8 @@ FROM Narration IMPORT InitPlace;
 FROM NPC IMPORT ResetMaterialized;
 FROM WorldObj IMPORT objects, objCount;
 FROM HudLog IMPORT AddLogLine;
-FROM BinaryIO IMPORT OpenRead, OpenWrite, Close, ReadBytes, WriteBytes, Done;
+FROM BinaryIO IMPORT OpenRead, OpenWrite, Close, ReadBytes, WriteBytes,
+                     ReadByte, WriteByte, Done;
 FROM Platform IMPORT ren, ScreenW, PlayH, TextH, Scale,
                     LoadBMPTexture, BeginFrame, EndFrame, DelayMs,
                     PollInput, InputState, DirNone;
@@ -82,10 +82,44 @@ BEGIN
   END
 END MakePath;
 
+(* Serialize/deserialize integers as 4 little-endian bytes.
+   Avoids ADR() which the C backend rejects. *)
+PROCEDURE WriteInt4(fd: CARDINAL; val: INTEGER);
+VAR buf: ARRAY [0..3] OF CHAR;
+BEGIN
+  buf[0] := CHR(BAND(CARDINAL(val), 255));
+  buf[1] := CHR(BAND(CARDINAL(val DIV 256), 255));
+  buf[2] := CHR(BAND(CARDINAL(val DIV 65536), 255));
+  buf[3] := CHR(BAND(CARDINAL(val DIV 16777216), 255));
+  WriteBytes(fd, buf, 4)
+END WriteInt4;
+
+PROCEDURE ReadInt4(fd: CARDINAL; VAR val: INTEGER);
+VAR buf: ARRAY [0..3] OF CHAR;
+    n: CARDINAL;
+BEGIN
+  ReadBytes(fd, buf, 4, n);
+  IF n < 4 THEN val := 0; RETURN END;
+  val := ORD(buf[0]) + ORD(buf[1]) * 256 +
+         ORD(buf[2]) * 65536 + ORD(buf[3]) * 16777216
+END ReadInt4;
+
+PROCEDURE WriteBool4(fd: CARDINAL; b: BOOLEAN);
+BEGIN
+  IF b THEN WriteInt4(fd, 1) ELSE WriteInt4(fd, 0) END
+END WriteBool4;
+
+PROCEDURE ReadBool4(fd: CARDINAL; VAR b: BOOLEAN);
+VAR v: INTEGER;
+BEGIN
+  ReadInt4(fd, v);
+  b := (v # 0)
+END ReadBool4;
+
 PROCEDURE SaveGame(slot: INTEGER): BOOLEAN;
 VAR path: ARRAY [0..63] OF CHAR;
     fd: CARDINAL;
-    n, i, v: INTEGER;
+    i, v, k: INTEGER;
     buf: ARRAY [0..3] OF CHAR;
 BEGIN
   MakePath(slot, path);
@@ -99,38 +133,34 @@ BEGIN
 
   (* Header *)
   buf[0] := 'F'; buf[1] := 'T'; buf[2] := 'A'; buf[3] := '1';
-  WriteBytes(fd, ADR(buf), 4, n);
+  WriteBytes(fd, buf, 4);
 
   (* Active brother *)
-  v := activeBrother;
-  WriteBytes(fd, ADR(v), 4, n);
+  WriteInt4(fd, activeBrother);
 
   (* All 3 brothers' stats and inventory *)
   FOR i := 0 TO 2 DO
-    WriteBytes(fd, ADR(brothers[i].vitality), 4, n);
-    WriteBytes(fd, ADR(brothers[i].weapon), 4, n);
-    WriteBytes(fd, ADR(brothers[i].brave), 4, n);
-    WriteBytes(fd, ADR(brothers[i].luck), 4, n);
-    WriteBytes(fd, ADR(brothers[i].kind), 4, n);
-    WriteBytes(fd, ADR(brothers[i].wealth), 4, n);
-    WriteBytes(fd, ADR(brothers[i].stuff[0]), 140, n);
-    v := 0; IF brothers[i].alive THEN v := 1 END;
-    WriteBytes(fd, ADR(v), 4, n)
+    WriteInt4(fd, brothers[i].vitality);
+    WriteInt4(fd, brothers[i].weapon);
+    WriteInt4(fd, brothers[i].brave);
+    WriteInt4(fd, brothers[i].luck);
+    WriteInt4(fd, brothers[i].kind);
+    WriteInt4(fd, brothers[i].wealth);
+    FOR k := 0 TO 34 DO WriteInt4(fd, brothers[i].stuff[k]) END;
+    WriteBool4(fd, brothers[i].alive)
   END;
 
   (* Player position and state *)
-  WriteBytes(fd, ADR(actors[0].absX), 4, n);
-  WriteBytes(fd, ADR(actors[0].absY), 4, n);
-  WriteBytes(fd, ADR(actors[0].weapon), 4, n);
-  WriteBytes(fd, ADR(actors[0].facing), 4, n);
+  WriteInt4(fd, actors[0].absX);
+  WriteInt4(fd, actors[0].absY);
+  WriteInt4(fd, actors[0].weapon);
+  WriteInt4(fd, actors[0].facing);
 
   (* Current region *)
-  v := currentRegion;
-  WriteBytes(fd, ADR(v), 4, n);
+  WriteInt4(fd, currentRegion);
 
   (* Princess state *)
-  v := 0; IF princessRescued THEN v := 1 END;
-  WriteBytes(fd, ADR(v), 4, n);
+  WriteBool4(fd, princessRescued);
 
   Close(fd);
   AddLogLine("Game saved.");
@@ -141,7 +171,7 @@ END SaveGame;
 PROCEDURE LoadGame(slot: INTEGER): BOOLEAN;
 VAR path: ARRAY [0..63] OF CHAR;
     fd: CARDINAL;
-    n, i, v: INTEGER;
+    n, i, v, k: INTEGER;
     buf: ARRAY [0..3] OF CHAR;
 BEGIN
   MakePath(slot, path);
@@ -152,7 +182,7 @@ BEGIN
   END;
 
   (* Verify header *)
-  ReadBytes(fd, ADR(buf), 4, n);
+  ReadBytes(fd, buf, 4, n);
   IF (n < 4) OR (buf[0] # 'F') OR (buf[1] # 'T') OR
      (buf[2] # 'A') OR (buf[3] # '1') THEN
     AddLogLine("Invalid save file.");
@@ -161,39 +191,36 @@ BEGIN
   END;
 
   (* Active brother *)
-  ReadBytes(fd, ADR(v), 4, n);
+  ReadInt4(fd, v);
   activeBrother := v;
   IF activeBrother > 2 THEN activeBrother := 0 END;
 
   (* All 3 brothers *)
   FOR i := 0 TO 2 DO
-    ReadBytes(fd, ADR(brothers[i].vitality), 4, n);
-    ReadBytes(fd, ADR(brothers[i].weapon), 4, n);
-    ReadBytes(fd, ADR(brothers[i].brave), 4, n);
-    ReadBytes(fd, ADR(brothers[i].luck), 4, n);
-    ReadBytes(fd, ADR(brothers[i].kind), 4, n);
-    ReadBytes(fd, ADR(brothers[i].wealth), 4, n);
-    ReadBytes(fd, ADR(brothers[i].stuff[0]), 140, n);
-    ReadBytes(fd, ADR(v), 4, n);
-    brothers[i].alive := (v # 0)
+    ReadInt4(fd, brothers[i].vitality);
+    ReadInt4(fd, brothers[i].weapon);
+    ReadInt4(fd, brothers[i].brave);
+    ReadInt4(fd, brothers[i].luck);
+    ReadInt4(fd, brothers[i].kind);
+    ReadInt4(fd, brothers[i].wealth);
+    FOR k := 0 TO 34 DO ReadInt4(fd, brothers[i].stuff[k]) END;
+    ReadBool4(fd, brothers[i].alive)
   END;
 
   (* Player position *)
-  ReadBytes(fd, ADR(actors[0].absX), 4, n);
-  ReadBytes(fd, ADR(actors[0].absY), 4, n);
-  ReadBytes(fd, ADR(actors[0].weapon), 4, n);
-  ReadBytes(fd, ADR(actors[0].facing), 4, n);
+  ReadInt4(fd, actors[0].absX);
+  ReadInt4(fd, actors[0].absY);
+  ReadInt4(fd, actors[0].weapon);
+  ReadInt4(fd, actors[0].facing);
 
-  (* Current region — added after facing in save format *)
-  ReadBytes(fd, ADR(v), 4, n);
-  IF (n >= 4) AND (v >= 0) AND (v <= 9) THEN
-    (* New save format with region *)
+  (* Current region *)
+  ReadInt4(fd, v);
+  IF (v >= 0) AND (v <= 9) THEN
     SwitchRegion(v)
   END;
 
   (* Princess state *)
-  ReadBytes(fd, ADR(v), 4, n);
-  princessRescued := (v # 0);
+  ReadBool4(fd, princessRescued);
 
   Close(fd);
 
