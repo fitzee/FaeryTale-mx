@@ -455,12 +455,17 @@ BEGIN
     END;
 
     IF (et = 52) THEN
-      ClearEnemySlots;
+      (* Original: load_actors() queues encounter, placement happens
+         later via normal encounter system at random positions 150+px away.
+         We use the pending encounter system for delayed placement. *)
+      pendingRace := 8;  (* Loraii *)
       cnt := extents[ei].v1;
       IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
       IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
       IF cnt < 1 THEN cnt := 1 END;
-      SpawnGroup(heroX, heroY, 8, cnt, 63);
+      pendingCount := cnt;
+      pendingMix := 0;
+      loadPending := TRUE;
       RETURN
     END;
 
