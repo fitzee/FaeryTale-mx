@@ -530,16 +530,19 @@ BEGIN
   END;
 
   (* Loraii (race 8): unique frame logic per actor index.
-     Original fmain.c:2381-2396. Three variants based on i%3.
-     Dying: frame 0x3F (63). Dead: vanish (handled elsewhere). *)
+     Original fmain.c:2381-2396. Sphere/Cube/Pyramid variants.
+     dex = (cycle & 3) * 2; if dex > 4 then dex--
+     Gives: 0, 2, 4, 5. Then offset by 0x25/0x28/0x30. *)
   IF actors[i].race = 8 THEN
     IF actors[i].state = StDying THEN RETURN 63
     ELSIF actors[i].state = StDead THEN RETURN 63
     ELSE
+      frame := (cycle MOD 4) * 2;
+      IF frame > 4 THEN DEC(frame) END;  (* 0, 2, 4, 5 *)
       CASE i MOD 3 OF
-        0: RETURN 37 |  (* 0x25 — static variant *)
-        1: RETURN 40 + (cycle DIV 4) MOD 4 |  (* 0x28+ cycling *)
-        2: RETURN 48 + (cycle DIV 4) MOD 4    (* 0x30+ cycling *)
+        0: RETURN 37 |                 (* Sphere — static *)
+        1: RETURN 40 + frame |         (* Cube — 40, 42, 44, 45 *)
+        2: RETURN 48 + frame           (* Pyramid — 48, 50, 52, 53 *)
       ELSE RETURN 37
       END
     END
