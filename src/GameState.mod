@@ -898,11 +898,24 @@ BEGIN
       actors[0].absX := actors[0].absX + actors[0].velX DIV 4;
       actors[0].absY := actors[0].absY + actors[0].velY DIV 4
     ELSE
-      (* Fall animation complete — fairy revives.
-         Original: goodfairy counter triggers revive(FALSE). *)
+      (* Fall animation complete — fairy revives at safe position.
+         Original: goodfairy counter triggers revive(FALSE).
+         Move player to nearest non-void terrain to prevent re-fall. *)
       actors[0].state := StStill;
       actors[0].velX := 0;
       actors[0].velY := 0;
+      (* Nudge to safe terrain — try all directions *)
+      FOR sec := 1 TO 32 DO
+        IF GetTerrainAt(actors[0].absX, actors[0].absY - sec) # 9 THEN
+          DEC(actors[0].absY, sec); sec := 32
+        ELSIF GetTerrainAt(actors[0].absX, actors[0].absY + sec) # 9 THEN
+          INC(actors[0].absY, sec); sec := 32
+        ELSIF GetTerrainAt(actors[0].absX + sec, actors[0].absY) # 9 THEN
+          INC(actors[0].absX, sec); sec := 32
+        ELSIF GetTerrainAt(actors[0].absX - sec, actors[0].absY) # 9 THEN
+          DEC(actors[0].absX, sec); sec := 32
+        END
+      END;
       ShowMessage("The good fairy catches you!")
     END;
     RETURN
