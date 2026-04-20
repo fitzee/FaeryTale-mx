@@ -700,7 +700,7 @@ BEGIN
   xs := (mapX + 151) DIV 256;
   ys := (mapY + 64) DIV 256;
   xr := (xs DIV 64) MOD 2;
-  yr := (ys DIV 32) MOD 4;
+  yr := (ys DIV 32) MOD 8;  (* original: & 7, NOT & 3 *)
   RETURN xr + yr * 2
 END DetectRegion;
 
