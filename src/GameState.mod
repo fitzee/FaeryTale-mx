@@ -1067,6 +1067,7 @@ BEGIN
 END BattleAftermath;
 
 PROCEDURE UpdatePlayer;
+VAR newX, newY: INTEGER;
 BEGIN
   IF input.quit THEN running := FALSE; RETURN END;
   IF actors[0].state = StSleep THEN RETURN END;
@@ -1179,6 +1180,33 @@ BEGIN
     ELSE ShowMessage("No food!"); potionCooldown := 30 END
   END;
   IF input.talk AND (potionCooldown = 0) THEN HandleTalk; potionCooldown := 30 END;
+  (* Slippery/void terrain (environ=-2): velocity-based movement.
+     Original fmain.c:1580-1598. Same system as swan but with proxcheck
+     and lower speed cap. Used in astral plane. *)
+  IF (actors[0].environ = -2) AND (riding # RideSwan) THEN
+    IF input.dirKey # DirNone THEN
+      actors[0].facing := input.dirKey;
+      INC(actors[0].velX, NewXDir(input.dirKey));
+      INC(actors[0].velY, NewYDir(input.dirKey));
+      IF actors[0].velX > 34 THEN actors[0].velX := 34
+      ELSIF actors[0].velX < -34 THEN actors[0].velX := -34 END;
+      IF actors[0].velY > 42 THEN actors[0].velY := 42
+      ELSIF actors[0].velY < -42 THEN actors[0].velY := -42 END;
+      actors[0].state := StWalking
+    END;
+    (* Apply velocity with proxcheck *)
+    newX := actors[0].absX + actors[0].velX DIV 4;
+    newY := actors[0].absY + actors[0].velY DIV 4;
+    IF ProxCheck(newX, newY, 0) = 0 THEN
+      actors[0].absX := newX;
+      actors[0].absY := newY
+    ELSE
+      actors[0].velX := 0; actors[0].velY := 0;
+      actors[0].environ := 0  (* stop sliding — original: k=0 *)
+    END;
+    RETURN
+  END;
+
   (* Swan flight — velocity-based movement, bypasses all terrain.
      Original fmain.c:2031-2053: environ==-2 path. *)
   IF riding = RideSwan THEN
@@ -1423,9 +1451,10 @@ BEGIN
       (* Original setmood: astral plane has MoodSpec (tracks 16-19),
          region 9 (caves) and 8 (indoor) both use MoodIndoor (tracks 20-23)
          but with different wave settings. We use MoodSpec for astral. *)
+      (* Original: coordinate check only, no region check.
+         hero_x > 0x2400 && < 0x3100 && hero_y > 0x8200 && < 0x8a00 *)
       IF (actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
-         (actors[0].absY > 33280) AND (actors[0].absY < 35328) AND
-         (currentRegion = 9) THEN
+         (actors[0].absY > 33280) AND (actors[0].absY < 35328) THEN
         SetMood(MoodSpec)
       ELSIF currentRegion >= 8 THEN
         SetCaveWave(currentRegion = 9);

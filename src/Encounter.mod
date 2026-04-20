@@ -48,6 +48,7 @@ VAR
   pendingCount:  INTEGER;
   pendingMix:    INTEGER;   (* mixflag: bit1=race mix, bit2=weapon re-rand *)
   tick:          INTEGER;   (* internal frame counter *)
+  prevXtype:     INTEGER;   (* previous extent type — gates forced spawns *)
 
   rngState: INTEGER;
 
@@ -408,16 +409,17 @@ BEGIN
   IF et < 70 THEN activeCarrier := 0 END;
 
   (* Peace zones — no spawning *)
-  IF et >= 80 THEN RETURN END;
+  IF et >= 80 THEN prevXtype := et; RETURN END;
 
   (* etype 70 with v3=10: dragon cave — spawn dragon *)
   IF (et = 70) AND (extents[ei].v3 = 10) THEN
     SpawnDragon;
+    prevXtype := et;
     RETURN
   END;
 
   (* Other etype 70: carrier zones (swan/turtle) — handled by Carrier.mod *)
-  IF et >= 70 THEN RETURN END;
+  IF et >= 70 THEN prevXtype := et; RETURN END;
 
   (* === PHASE 2: Place pending encounter ===
      Original: every 16 daynight ticks, if load pending and no actors visible.
@@ -429,54 +431,50 @@ BEGIN
   END;
 
   (* === Forced encounters for special extents (etype >= 50) === *)
-  (* These only trigger on FIRST entry to the extent (xtype changed).
-     Original: xtype != extn->etype gates all forced spawns. *)
+  (* Forced spawns only trigger when extent type CHANGES.
+     Original: if (xtype != extn->etype) gates all forced spawns. *)
+  IF et # prevXtype THEN
+    prevXtype := et;
 
-  (* etype 60/61: force-spawn at extent center.
-     61 = turtle eggs (snakes), 60 = necromancer/dark knight *)
-  IF ((et = 60) OR (et = 61)) AND
-     ((actorCount < 4) OR (actors[3].race # extents[ei].v3)) THEN
-    IF (et = 61) AND (turtleEggs OR turtleEggsDone) THEN
-      (* turtle eggs already handled *)
-    ELSE
-      IF et = 61 THEN turtleEggs := TRUE END;
+    IF ((et = 60) OR (et = 61)) AND
+       ((actorCount < 4) OR (actors[3].race # extents[ei].v3)) THEN
+      IF (et = 61) AND (turtleEggs OR turtleEggsDone) THEN
+        (* turtle eggs already handled *)
+      ELSE
+        IF et = 61 THEN turtleEggs := TRUE END;
+        ClearEnemySlots;
+        cnt := extents[ei].v1;
+        IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
+        IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
+        IF cnt < 1 THEN cnt := 1 END;
+        SpawnGroup((extents[ei].x1 + extents[ei].x2) DIV 2,
+                   (extents[ei].y1 + extents[ei].y2) DIV 2,
+                   extents[ei].v3, cnt, 63);
+        RETURN
+      END
+    END;
+
+    IF (et = 52) THEN
       ClearEnemySlots;
       cnt := extents[ei].v1;
       IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
       IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
       IF cnt < 1 THEN cnt := 1 END;
-      SpawnGroup((extents[ei].x1 + extents[ei].x2) DIV 2,
-                 (extents[ei].y1 + extents[ei].y2) DIV 2,
-                 extents[ei].v3, cnt, 63);
+      SpawnGroup(heroX, heroY, 8, cnt, 63);
       RETURN
-    END
-  END;
+    END;
 
-  (* etype 52: Loraii / astral plane — force Loraii (race 8) spawn.
-     Original: sets encounter_type=8 and loads actors. *)
-  IF (et = 52) AND (NOT ActorsOnScreen(heroX, heroY)) AND
-     (CountLivingEnemies() = 0) THEN
-    ClearEnemySlots;
-    cnt := extents[ei].v1;
-    IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
-    IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
-    IF cnt < 1 THEN cnt := 1 END;
-    SpawnGroup(heroX, heroY, 8, cnt, 63);
-    RETURN
-  END;
-
-  (* etype 53: Spider pit — force spawn at player position.
-     Original: xtype >= 50 && flag == 1 → force at hero pos. *)
-  IF (et = 53) AND (NOT ActorsOnScreen(heroX, heroY)) AND
-     (CountLivingEnemies() = 0) THEN
-    ClearEnemySlots;
+    IF (et = 53) THEN
+      ClearEnemySlots;
     cnt := extents[ei].v1;
     IF extents[ei].v2 > 0 THEN INC(cnt, Rand(extents[ei].v2)) END;
     IF cnt > MaxEnemies THEN cnt := MaxEnemies END;
     IF cnt < 1 THEN cnt := 1 END;
     SpawnGroup(heroX, heroY, extents[ei].v3, cnt, 63);
     RETURN
-  END;
+  END
+
+  END;  (* IF et # prevXtype *)
 
   (* === PHASE 1: Queue new random encounter ===
      Original: every 32 daynight ticks.
@@ -547,6 +545,7 @@ BEGIN
   pendingCount := 0;
   pendingMix := 0;
   tick := 0;
+  prevXtype := -1;
   InitCharts;
   InitWeaponProbs;
   InitExtents;
