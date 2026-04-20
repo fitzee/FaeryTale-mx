@@ -37,7 +37,7 @@ FROM Menu IMPORT cmode, menus, realOptions, optionCount, MaxOpts,
 FROM HudFont IMPORT DrawHudStr, DrawMenuStr;
 FROM WorldObj IMPORT objTex;
 FROM NPC IMPORT GetSetfigSprite;
-FROM Carrier IMPORT riding;
+FROM Carrier IMPORT riding, RideSwan;
 FROM HudLog IMPORT GetLine, GetStatBrv, GetStatLck, GetStatKnd,
                    GetStatWlth, GetStatVit, logDirty, statDirty;
 
@@ -419,9 +419,9 @@ VAR base, inum, frame: INTEGER;
 BEGIN
   IF NOT wpnInited THEN InitWpnState END;
 
-  (* When riding, show static standing pose *)
+  (* When riding, show static pose — original: dex = diroffs[d], no animation *)
   IF (riding # 0) AND (i = 0) THEN
-    RETURN WalkBase(actors[i].facing) + 1
+    RETURN WalkBase(actors[i].facing)
   END;
 
   IF actors[i].state = StWalking THEN
@@ -761,14 +761,23 @@ BEGIN
      environ 3-19: progressive sink, character still visible.
      environ 20-29: "hands up" sprites — character mostly submerged.
      environ 30+: "hands up" sprites only, character gone. *)
-  IF env > 19 THEN
-    (* Arms above surface — draw "hands up" object sprites 97/98 *)
+  IF env > 29 THEN
+    (* Fully submerged — animated bubbles from objects sheet 97/98 *)
     IF objTex # NIL THEN
       srcY := (97 + (cycle MOD 2)) * 16;
       SetColorMod(objTex, fadeR, fadeG, fadeB);
       DrawTexRegion(objTex, 0, srcY, 16, 8,
-                    sx - S(8), sy - S(16) + S(env - 12), S(16), S(8))
+                    sx - S(8), sy - S(4), S(16), S(8))
     END;
+    RETURN
+  END;
+  IF env > 19 THEN
+    (* Arms above surface — brother sprite frame 56 ("hands up").
+       Draw only the top portion, sinking progressively. *)
+    SetColorMod(tex, fadeR, fadeG, fadeB);
+    srcY := 56 * SprH;
+    DrawTexRegion(tex, 0, srcY, SprW, 12,
+                  sx - S(8), sy - S(16) + S(env - 8), S(SprW), S(12));
     RETURN
   END;
   IF env = 2 THEN
@@ -889,8 +898,14 @@ BEGIN
   IF (i = 0) AND (brotherTex[activeBrother] # NIL) THEN
     frame := GetPlayerFrame(i);
     stateIdx := GetStateIdx(i);
-    (* When riding, offset player UP to appear on top of carrier *)
-    IF riding # 0 THEN
+    (* Original rendering offsets:
+       Normal: player at (abs-8, abs-26). Swan carrier at (abs-32, abs-40).
+       Swan riding: player at NORMAL position, bottom 16px clipped (ystop-=16).
+       The swan body (drawn separately) covers the clipped legs.
+       Raft/turtle: player offset up 10px to sit on carrier. *)
+    IF riding = RideSwan THEN
+      DrawBrotherSprite(i, activeBrother, frame, sx, sy, 16)
+    ELSIF riding # 0 THEN
       DrawBrotherSprite(i, activeBrother, frame, sx, sy - S(10), actors[i].environ)
     ELSE
       DrawBrotherSprite(i, activeBrother, frame, sx, sy, actors[i].environ)
@@ -992,14 +1007,23 @@ BEGIN
                       sx - S(16), sy - S(16), S(32), S(32))
       END
     ELSIF actors[i].race = 11 THEN
-      (* Swan/Bird: 8 frames, 1 per direction, 64x64.
-         Sheet order: NW,N,NE,E,SE,S,SW,W — same as turtle.
-         Remap: (facing + 1) MOD 8 *)
-      IF birdTex # NIL THEN
-        frame := (actors[i].facing + 1) MOD 8;
-        SetColorMod(birdTex, fadeR, fadeG, fadeB);
-        DrawTexRegion(birdTex, 0, frame * 64, 64, 64,
-                      sx - S(32), sy - S(32), S(64), S(64))
+      IF riding = RideSwan THEN
+        (* Flying swan: 8 directional frames, 64x64.
+           Sheet order: NW,N,NE,E,SE,S,SW,W.
+           Remap: (facing + 1) MOD 8 *)
+        IF birdTex # NIL THEN
+          frame := (actors[i].facing + 1) MOD 8;
+          SetColorMod(birdTex, fadeR, fadeG, fadeB);
+          DrawTexRegion(birdTex, 0, frame * 64, 64, 64,
+                        sx - S(32), sy - S(32), S(64), S(64))
+        END
+      ELSE
+        (* Sitting swan: frame 1 of raft sheet (32x32) *)
+        IF raftTex # NIL THEN
+          SetColorMod(raftTex, fadeR, fadeG, fadeB);
+          DrawTexRegion(raftTex, 0, 32, 32, 32,
+                        sx - S(16), sy - S(16), S(32), S(32))
+        END
       END
     END;
     RETURN

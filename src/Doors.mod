@@ -173,7 +173,12 @@ BEGIN
           newRegion := 9
         END;
         WriteString("Door: entering region ");
-        WriteInt(newRegion, 1); WriteLn;
+        WriteInt(newRegion, 1);
+        WriteString(" via door "); WriteInt(j, 1);
+        WriteString(" at "); WriteInt(d.xc1, 1);
+        WriteString(","); WriteInt(d.yc1, 1);
+        WriteString(" -> "); WriteInt(newX, 1);
+        WriteString(","); WriteInt(newY, 1); WriteLn;
         RETURN TRUE
       END;
       IF (i >= DoorCount) OR (k < 0) THEN
@@ -181,26 +186,42 @@ BEGIN
       END
     END
   ELSE
-    (* Indoor to Outdoor: linear search by xc2/yc2 *)
+    (* Indoor to Outdoor: linear search by xc2/yc2 (indoor position).
+       Original fmain.c:2572-2609. Includes direction check:
+       horizontal (type&1): reject if (hero_y & 16) == 0
+       vertical: reject if (hero_x & 15) < 2 *)
     FOR j := 0 TO DoorCount - 1 DO
       d := doors[j];
       IF (d.yc2 = ytest) AND
          ((d.xc2 = xtest) OR
           ((d.xc2 = xtest - 16) AND ((d.dtype MOD 2) = 1))) THEN
         dt := d.dtype;
-        IF dt = CAVE THEN
-          newX := d.xc1 - 4;
-          newY := d.yc1 + 16
-        ELSIF (dt MOD 2) = 1 THEN
-          newX := d.xc1 + 16;
-          newY := d.yc1 + 34
+        (* Direction check — must approach from correct side to exit *)
+        IF (dt MOD 2) = 1 THEN
+          IF BAND(CARDINAL(heroY), 16) = 0 THEN
+            (* wrong side — skip *)
+          ELSE
+            IF dt = CAVE THEN
+              newX := d.xc1 - 4; newY := d.yc1 + 16
+            ELSE
+              newX := d.xc1 + 16; newY := d.yc1 + 34
+            END;
+            newRegion := -1;
+            RETURN TRUE
+          END
         ELSE
-          newX := d.xc1 + 20;
-          newY := d.yc1 + 16
-        END;
-        newRegion := -1;
-        WriteString("Door: exiting to outdoor"); WriteLn;
-        RETURN TRUE
+          IF (heroX MOD 16) < 2 THEN
+            (* wrong side *)
+          ELSE
+            IF dt = CAVE THEN
+              newX := d.xc1 - 4; newY := d.yc1 + 16
+            ELSE
+              newX := d.xc1 + 20; newY := d.yc1 + 16
+            END;
+            newRegion := -1;
+            RETURN TRUE
+          END
+        END
       END
     END
   END;

@@ -28,7 +28,6 @@ CONST
 VAR
   raftProx: INTEGER;  (* 0=far, 1=near, 2=very near *)
   turtleTick: INTEGER;
-  swanCooldown: INTEGER;  (* frames before remount allowed after dismount *)
 
 PROCEDURE Abs(x: INTEGER): INTEGER;
 BEGIN IF x < 0 THEN RETURN -x ELSE RETURN x END
@@ -175,10 +174,14 @@ END UpdateTurtleCarrier;
 PROCEDURE IsFireyDeath(): BOOLEAN;
 (* Original: fiery_death = map_x > 8802 && map_x < 13562 &&
    map_y > 24744 && map_y < 29544.
-   Plain of Grief / lava zone — swan can't land here. *)
+   Plain of Grief / lava zone — swan can't land here.
+   Use player position directly since camera may be stale. *)
+VAR px, py: INTEGER;
 BEGIN
-  RETURN (camX > 8802) AND (camX < 13562) AND
-         (camY > 24744) AND (camY < 29544)
+  px := actors[0].absX - 144;  (* map_x = hero_x - 144 *)
+  py := actors[0].absY - 90;   (* map_y = hero_y - 90 *)
+  RETURN (px > 8802) AND (px < 13562) AND
+         (py > 24744) AND (py < 29544)
 END IsFireyDeath;
 
 PROCEDURE UpdateSwanCarrier;
@@ -200,30 +203,52 @@ BEGIN
        on attack press. Only land on passable non-water terrain. *)
     IF swanDismount THEN
       swanDismount := FALSE;
+      dismountResult := 0;
       IF IsFireyDeath() THEN
-        (* Event 32: can't land in lava *)
+        dismountResult := 2  (* too hot — Event 32 *)
       ELSIF (Abs(actors[0].velX) >= 15) OR (Abs(actors[0].velY) >= 15) THEN
-        (* Event 33: too fast — stop pressing direction first *)
+        dismountResult := 1  (* too fast — Event 33 *)
       ELSE
+        (* Original: proxcheck at (x, y-14) and (x, y+10-14).
+           Allow terrain 0,2,3,6,7,8,9. Block 1,4,5,>=10. *)
         yt := actors[0].absY - 14;
         terrain := GetTerrainAt(actors[0].absX, yt);
-        IF (terrain # 1) AND (terrain < 4) THEN
-          riding := RideNone;
-          actors[0].absY := yt;
-          actors[0].environ := 0;
-          actors[0].velX := 0;
-          actors[0].velY := 0;
-          actors[0].state := StStill;
-          (* Swan stays at landing spot for remount *)
-          actors[CarrierSlot].state := StStill;
-          swanCooldown := 30  (* prevent instant remount *)
+        IF (terrain = 1) OR ((terrain >= 4) AND (terrain <= 5)) OR
+           (terrain >= 10) THEN
+          (* Try current position as fallback *)
+          yt := actors[0].absY;
+          terrain := GetTerrainAt(actors[0].absX, yt);
+          IF (terrain = 1) OR ((terrain >= 4) AND (terrain <= 5)) OR
+             (terrain >= 10) THEN
+            dismountResult := 3;
+            yt := -1  (* mark failed *)
+          END
+        END;
+        IF yt >= 0 THEN
+          terrain := GetTerrainAt(actors[0].absX, yt + 10);
+          IF (terrain = 1) OR ((terrain >= 4) AND (terrain <= 5)) OR
+             (terrain >= 10) THEN
+            dismountResult := 3
+          ELSE
+            riding := RideNone;
+            actors[0].absY := yt;
+            actors[0].environ := 0;
+            actors[0].velX := 0;
+            actors[0].velY := 0;
+            actors[0].state := StStill;
+            actors[CarrierSlot].state := StStill;
+            swanCooldown := 30
+          END
         END
       END
     END
   ELSE
     (* Not riding — check if player near swan with lasso *)
     IF swanCooldown > 0 THEN
-      DEC(swanCooldown)
+      CheckProximity(CarrierSlot);
+      IF raftProx = 0 THEN
+        swanCooldown := 0  (* player walked away — allow remount *)
+      END
     ELSIF HasStuff(StLasso) THEN
       CheckProximity(CarrierSlot);
       IF raftProx >= 1 THEN
@@ -316,13 +341,15 @@ BEGIN
   IF activeCarrier = 5 THEN UpdateTurtleCarrier
   ELSIF activeCarrier = 11 THEN UpdateSwanCarrier
   ELSIF (riding = RideSwan) OR
-        ((actors[CarrierSlot].actorType = TypeCarrier) AND
+        ((actorCount > CarrierSlot) AND
+         (actors[CarrierSlot].actorType = TypeCarrier) AND
          (actors[CarrierSlot].race = 11) AND
          (actors[CarrierSlot].vitality > 0)) THEN
     (* Swan exists (riding or dismounted) — keep active for remount *)
     activeCarrier := 11;
     UpdateSwanCarrier
-  ELSIF (actors[CarrierSlot].actorType = TypeCarrier) AND
+  ELSIF (actorCount > CarrierSlot) AND
+        (actors[CarrierSlot].actorType = TypeCarrier) AND
         (actors[CarrierSlot].race = 5) AND
         (actors[CarrierSlot].vitality > 0) THEN
     (* Turtle exists but activeCarrier was cleared by extent reset. *)
@@ -408,5 +435,6 @@ BEGIN
   dragonFire := FALSE;
   swanDismount := FALSE;
   swanCooldown := 0;
+  dismountResult := 0;
   dragonRng := 31337
 END Carrier.

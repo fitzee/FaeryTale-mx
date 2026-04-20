@@ -45,7 +45,8 @@ FROM Encounter IMPORT InitEncounters, UpdateEncounters, EnemiesNearby,
                       ActorsOnScreen, MoveExtent;
 FROM Carrier IMPORT InitCarriers, UpdateCarriers, SpawnTurtle,
                TalkToCarrier, riding, turtleEggs, turtleEggsDone,
-               UpdateDragon, dragonFire, swanDismount, RideSwan;
+               UpdateDragon, dragonFire, swanDismount, dismountResult,
+               swanCooldown, RideSwan;
 FROM Quest IMPORT CheckRescue, CheckWinCondition, ShowWinScreen,
                SaveGame, LoadGame;
 FROM Missile IMPORT InitMissiles, UpdateMissiles, FireMissile;
@@ -906,9 +907,10 @@ BEGIN
      environ 3-15: -1 vit/frame. environ > 15: instant death.
      stuff[23] (Fruit) protects completely. *)
   IF (camX > 8802) AND (camX < 13562) AND
-     (camY > 24744) AND (camY < 29544) THEN
-    IF brothers[activeBrother].stuff[24] > 0 THEN  (* Fruit = stuff[24] *)
-      (* Fruit protects from lava *)
+     (camY > 24744) AND (camY < 29544) AND
+     (NOT cheatGod) THEN
+    IF brothers[activeBrother].stuff[23] > 0 THEN  (* Rose = stuff[23] *)
+      (* Rose protects from lava — original: stuff[23] *)
       actors[0].environ := 0
     ELSIF actors[0].environ > 15 THEN
       actors[0].vitality := 0;
@@ -928,7 +930,8 @@ BEGIN
 
   (* Original fmain.c:2444-2451 — drowning at environ 30.
      Every 8 frames, decrement vitality. Event 6. *)
-  IF (actors[0].environ = 30) AND (BAND(CARDINAL(cycle), 7) = 0) THEN
+  IF (actors[0].environ = 30) AND (BAND(CARDINAL(cycle), 7) = 0) AND
+     (NOT cheatGod) THEN
     DEC(actors[0].vitality);
     IF actors[0].vitality <= 0 THEN
       actors[0].vitality := 0;
@@ -1174,7 +1177,7 @@ BEGIN
     IF actors[0].absY > 40959 THEN actors[0].absY := 40959; actors[0].velY := 0 END;
     RETURN
   END;
-  IF input.attack THEN
+  IF input.attack AND (swanCooldown = 0) THEN
     IF (actors[0].weapon >= 4) AND (actors[0].state # StShoot1) THEN
       IF (actors[0].weapon = 4) AND
          (brothers[activeBrother].stuff[8] <= 0) THEN
@@ -1318,6 +1321,11 @@ BEGIN
     UpdateMissiles
   END;
   UpdateCarriers;
+  (* Swan dismount messages — Carrier can't import Narration. *)
+  IF dismountResult = 1 THEN Event(33)
+  ELSIF dismountResult = 2 THEN Event(32)
+  END;
+  dismountResult := 0;
   UpdateDragon;
   IF dragonFire THEN
     FireMissile(3);  (* CarrierSlot = 3 *)
