@@ -28,6 +28,7 @@ CONST
 VAR
   raftProx: INTEGER;  (* 0=far, 1=near, 2=very near *)
   turtleTick: INTEGER;
+  swanCooldown: INTEGER;  (* frames before remount allowed after dismount *)
 
 PROCEDURE Abs(x: INTEGER): INTEGER;
 BEGIN IF x < 0 THEN RETURN -x ELSE RETURN x END
@@ -200,7 +201,9 @@ BEGIN
     IF swanDismount THEN
       swanDismount := FALSE;
       IF IsFireyDeath() THEN
-        (* can't land in lava *)
+        (* Event 32: can't land in lava *)
+      ELSIF (Abs(actors[0].velX) >= 15) OR (Abs(actors[0].velY) >= 15) THEN
+        (* Event 33: too fast — stop pressing direction first *)
       ELSE
         yt := actors[0].absY - 14;
         terrain := GetTerrainAt(actors[0].absX, yt);
@@ -210,18 +213,25 @@ BEGIN
           actors[0].environ := 0;
           actors[0].velX := 0;
           actors[0].velY := 0;
-          actors[0].state := StStill
+          actors[0].state := StStill;
+          (* Swan stays at landing spot for remount *)
+          actors[CarrierSlot].state := StStill;
+          swanCooldown := 30  (* prevent instant remount *)
         END
       END
     END
   ELSE
     (* Not riding — check if player near swan with lasso *)
-    IF HasStuff(StLasso) THEN
+    IF swanCooldown > 0 THEN
+      DEC(swanCooldown)
+    ELSIF HasStuff(StLasso) THEN
       CheckProximity(CarrierSlot);
       IF raftProx >= 1 THEN
         riding := RideSwan;
         actors[CarrierSlot].absX := actors[0].absX;
-        actors[CarrierSlot].absY := actors[0].absY
+        actors[CarrierSlot].absY := actors[0].absY;
+        actors[0].velX := 0;
+        actors[0].velY := 0
       END
     END
   END
@@ -397,5 +407,6 @@ BEGIN
   dragonSpawned := FALSE;
   dragonFire := FALSE;
   swanDismount := FALSE;
+  swanCooldown := 0;
   dragonRng := 31337
 END Carrier.

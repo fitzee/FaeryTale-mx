@@ -755,16 +755,19 @@ BEGIN
   dstH := S(SprH);
   clipBot := 0;
 
-  (* Original fmain.c:3460-3488 — sinking/drowning visuals.
-     environ 2: clip 10px (brush). 3-29: progressive sink.
-     30+: replace with "hands up" sprites 97/98. *)
-  IF env > 29 THEN
-    (* Fully submerged — draw "hands up" sprites from objects sheet *)
+  (* Original fmain.c:3460-3488 — sinking visuals.
+     Same for water, quicksand, and lava — environ drives it all.
+     environ 2: clip 10px (brush/shallow).
+     environ 3-19: progressive sink, character still visible.
+     environ 20-29: "hands up" sprites — character mostly submerged.
+     environ 30+: "hands up" sprites only, character gone. *)
+  IF env > 19 THEN
+    (* Arms above surface — draw "hands up" object sprites 97/98 *)
     IF objTex # NIL THEN
       srcY := (97 + (cycle MOD 2)) * 16;
       SetColorMod(objTex, fadeR, fadeG, fadeB);
       DrawTexRegion(objTex, 0, srcY, 16, 8,
-                    sx - S(8), sy - S(4), S(16), S(8))
+                    sx - S(8), sy - S(16) + S(env - 12), S(16), S(8))
     END;
     RETURN
   END;
