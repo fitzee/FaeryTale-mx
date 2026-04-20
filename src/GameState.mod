@@ -1341,7 +1341,7 @@ BEGIN
       END
     END;
     InitPlace(actors[0].absX, actors[0].absY, currentRegion);
-    doorCooldown := 60
+    doorCooldown := 20  (* reduced from 60 — prevents same-door bounce *)
   END
 END CheckDoors;
 
