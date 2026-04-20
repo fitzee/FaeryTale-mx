@@ -886,19 +886,24 @@ BEGIN
   (* Skip if already dying/dead — original checkdead handles transition *)
   IF (actors[0].state = StDying) OR (actors[0].state = StDead) THEN RETURN END;
 
-  (* Fall state processing — original fmain.c:2265-2274.
-     Tactic counts up, velocity dampens 75%/frame, after 30 frames die. *)
+  (* Fall state processing — original fmain.c:1732-1739.
+     Tactic counts up, velocity dampens 75%/frame.
+     NO vitality loss. After 30 frames, fairy revives to StStill.
+     Only the initial -2 luck on entry. *)
   IF actors[0].state = StFall THEN
-    INC(actors[0].tactic);
-    actors[0].velX := (actors[0].velX * 3) DIV 4;
-    actors[0].velY := (actors[0].velY * 3) DIV 4;
-    actors[0].absX := actors[0].absX + actors[0].velX DIV 4;
-    actors[0].absY := actors[0].absY + actors[0].velY DIV 4;
-    IF actors[0].tactic >= 30 THEN
-      actors[0].vitality := 0;
-      actors[0].state := StDying;
-      actors[0].tactic := 7;
-      DecLuck(2)
+    IF actors[0].tactic < 30 THEN
+      INC(actors[0].tactic);
+      actors[0].velX := (actors[0].velX * 3) DIV 4;
+      actors[0].velY := (actors[0].velY * 3) DIV 4;
+      actors[0].absX := actors[0].absX + actors[0].velX DIV 4;
+      actors[0].absY := actors[0].absY + actors[0].velY DIV 4
+    ELSE
+      (* Fall animation complete — fairy revives.
+         Original: goodfairy counter triggers revive(FALSE). *)
+      actors[0].state := StStill;
+      actors[0].velX := 0;
+      actors[0].velY := 0;
+      ShowMessage("The good fairy catches you!")
     END;
     RETURN
   END;
@@ -1439,8 +1444,14 @@ BEGIN
     prevBattle := battleFlag;  (* save BEFORE updating — like original battle2 *)
     battleFlag := EnemiesNearby(actors[0].absX, actors[0].absY);
     IF battleFlag AND (NOT prevBattle) THEN aftermathDone := FALSE END;
-    (* Battle music START — immediate when battle begins *)
-    IF battleFlag AND (NOT prevBattle) THEN SetMood(MoodBattle) END;
+    (* Battle music START — immediate, but NOT in astral plane.
+       Original: setmood checks astral coordinates before battleflag. *)
+    IF battleFlag AND (NOT prevBattle) THEN
+      IF NOT ((actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
+              (actors[0].absY > 33280) AND (actors[0].absY < 35328)) THEN
+        SetMood(MoodBattle)
+      END
+    END;
     (* Battle END — aftermath *)
     IF (NOT battleFlag) AND prevBattle AND (NOT aftermathDone) THEN
       BattleAftermath;
@@ -1450,21 +1461,22 @@ BEGIN
   (* Normal music resume — only every 8 frames, queued not immediate *)
   IF MusicTickDue() AND
      (actors[0].state # StDead) AND (actors[0].state # StDying) THEN
-    IF NOT battleFlag THEN
-      (* Original setmood: astral plane has MoodSpec (tracks 16-19),
-         region 9 (caves) and 8 (indoor) both use MoodIndoor (tracks 20-23)
-         but with different wave settings. We use MoodSpec for astral. *)
-      (* Original: coordinate check only, no region check.
-         hero_x > 0x2400 && < 0x3100 && hero_y > 0x8200 && < 0x8a00 *)
-      IF (actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
-         (actors[0].absY > 33280) AND (actors[0].absY < 35328) THEN
-        SetMood(MoodSpec)
-      ELSIF currentRegion >= 8 THEN
-        SetCaveWave(currentRegion = 9);
-        SetMood(MoodIndoor)
-      ELSIF lightlevel > 120 THEN SetMood(MoodDay)
-      ELSE SetMood(MoodNight) END
-    END
+    (* Original setmood order (fmain.c:2938-2949):
+       1. Dead → death music
+       2. Astral coordinates → MoodSpec (BEFORE battleflag!)
+       3. Battleflag → battle music
+       4. Region > 7 → indoor/cave
+       5. Day/night *)
+    IF (actors[0].absX > 9216) AND (actors[0].absX < 12544) AND
+       (actors[0].absY > 33280) AND (actors[0].absY < 35328) THEN
+      SetMood(MoodSpec)
+    ELSIF battleFlag THEN
+      SetMood(MoodBattle)
+    ELSIF currentRegion >= 8 THEN
+      SetCaveWave(currentRegion = 9);
+      SetMood(MoodIndoor)
+    ELSIF lightlevel > 120 THEN SetMood(MoodDay)
+    ELSE SetMood(MoodNight) END
   END;
 
   IF currentRegion >= 8 THEN brightness := 100; isNight := FALSE

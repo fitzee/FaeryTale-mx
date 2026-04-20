@@ -14,7 +14,7 @@ FROM World IMPORT tiles, WorldW, WorldH, TileSize, camX, camY,
                   TerrMountain, TerrPath, TerrWall, TerrDoor,
                   TerrSand, TerrSwamp, TerrBridge, TerrFloor;
 FROM Actor IMPORT actors, actorCount, StDead, StDying, StStill,
-                  StWalking, StFighting, StSleep,
+                  StWalking, StFighting, StSleep, StFall,
                   TypeEnemy, TypeSetfig, TypeRaft, TypeCarrier, TypeDragon;
 FROM Items IMPORT items, itemCount, inventory,
                   ItemGold, ItemFood, ItemKey, ItemSword,
@@ -921,6 +921,30 @@ END GetStateIdx;
 PROCEDURE DrawActorBody(i, sx, sy: INTEGER);
 VAR frame, texIdx, stateIdx, mx, my, npcBank, npcFrame: INTEGER;
 BEGIN
+  IF (i = 0) AND (actors[i].state = StFall) THEN
+    (* Falling animation — drawn from shape_9 (enemyTex[3]).
+       3 frames per brother, cycling via tactic/5.
+       Julian: 30,32,56  Phillip: 34,37,58  Kevin: 53,54,59 *)
+    IF enemyTex[3] # NIL THEN
+      CASE activeBrother OF
+        0: CASE actors[i].tactic DIV 10 OF
+             0: frame := 30 | 1: frame := 32 | 2: frame := 56
+           ELSE frame := 56 END |
+        1: CASE actors[i].tactic DIV 10 OF
+             0: frame := 34 | 1: frame := 37 | 2: frame := 58
+           ELSE frame := 58 END |
+        2: CASE actors[i].tactic DIV 10 OF
+             0: frame := 53 | 1: frame := 54 | 2: frame := 59
+           ELSE frame := 59 END
+      ELSE frame := 30
+      END;
+      SetColorMod(enemyTex[3], fadeR, fadeG, fadeB);
+      DrawTexRegion(enemyTex[3], 0, frame * SprH, SprW, SprH,
+                    sx - S(8), sy - S(16), S(SprW), S(SprH))
+    END;
+    RETURN
+  END;
+
   IF (i = 0) AND (brotherTex[activeBrother] # NIL) THEN
     frame := GetPlayerFrame(i);
     stateIdx := GetStateIdx(i);
