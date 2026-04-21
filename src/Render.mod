@@ -928,14 +928,14 @@ BEGIN
     IF enemyTex[3] # NIL THEN
       CASE activeBrother OF
         0: CASE actors[i].tactic DIV 10 OF
-             0: frame := 30 | 1: frame := 32 | 2: frame := 56
-           ELSE frame := 56 END |
-        1: CASE actors[i].tactic DIV 10 OF
-             0: frame := 34 | 1: frame := 37 | 2: frame := 58
+             0: frame := 32 | 1: frame := 34 | 2: frame := 58
            ELSE frame := 58 END |
+        1: CASE actors[i].tactic DIV 10 OF
+             0: frame := 36 | 1: frame := 39 | 2: frame := 60
+           ELSE frame := 60 END |
         2: CASE actors[i].tactic DIV 10 OF
-             0: frame := 53 | 1: frame := 54 | 2: frame := 59
-           ELSE frame := 59 END
+             0: frame := 55 | 1: frame := 56 | 2: frame := 61
+           ELSE frame := 61 END
       ELSE frame := 30
       END;
       SetColorMod(enemyTex[3], fadeR, fadeG, fadeB);
