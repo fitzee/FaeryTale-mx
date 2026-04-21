@@ -1100,6 +1100,7 @@ VAR newX, newY: INTEGER;
 BEGIN
   IF input.quit THEN running := FALSE; RETURN END;
   IF actors[0].state = StSleep THEN RETURN END;
+  IF actors[0].state = StFall THEN RETURN END;  (* no input during fall *)
   (* Player DYING → DEAD transition: tactic counts down from 7 *)
   IF actors[0].state = StDying THEN
     IF actors[0].tactic = 7 THEN
