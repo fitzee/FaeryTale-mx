@@ -17,10 +17,18 @@ https://github.com/fitzee/mx
 
 ---
 
-| | | |
-|:---:|:---:|:---:|
-| ![](pics/img1.png) | ![](pics/img2.png) | ![](pics/img3.png) |
-| ![](pics/img4.png) | ![](pics/img5.png) | ![](pics/img6.png) |
+<table>
+<tr>
+<td><img src="pics/img1.png"></td>
+<td><img src="pics/img2.png"></td>
+<td><img src="pics/img3.png"></td>
+</tr>
+<tr>
+<td><img src="pics/img4.png"></td>
+<td><img src="pics/img5.png"></td>
+<td><img src="pics/img6.png"></td>
+</tr>
+</table>
 
 ---
 
