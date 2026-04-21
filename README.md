@@ -47,7 +47,7 @@ mx build
 .mx/bin/faerytale
 ```
 
-> **Note:** While this has been compiled for Linux and does seem to mostly work, it has not been extensively tested on that platform.
+> **Note:** This has been developed and tested on macOS. While it does compile for Linux and seems to mostly work, it has not been extensively tested on that platform.
 
 ---
 
