@@ -34,6 +34,23 @@ https://github.com/fitzee/mx
 
 ---
 
+## Building
+
+You will need [mx](https://github.com/fitzee/mx) installed, along with SDL2.
+
+```bash
+git clone https://github.com/fitzee/FaeryTale-mx
+git clone https://github.com/fitzee/sndys        # audio library
+git clone https://github.com/fitzee/m2blitter     # Amiga Blitter "emulator"
+cd FaeryTale-mx
+mx build
+.mx/bin/faerytale
+```
+
+> **Note:** While this has been compiled for Linux and does seem to mostly work, it has not been extensively tested on that platform.
+
+---
+
 ## Current State
 
 Mostly done, roughly 90 percent.
