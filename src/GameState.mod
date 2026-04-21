@@ -929,8 +929,10 @@ BEGIN
       IF actors[0].state # StFall THEN
         actors[0].state := StFall;
         actors[0].tactic := 0;
-        DecLuck(2);
-        SetMood(MoodBattle)
+        DecLuck(2)
+        (* No music change — astral MoodSpec persists during fall.
+           Original: setmood(TRUE) runs priority check, astral coords
+           take priority over battleflag. *)
       END
     END
   END;
