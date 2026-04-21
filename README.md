@@ -1,16 +1,63 @@
-# Faery Tale Adventure — Modula-2 (mx) Port
+# Faery Tale Adventure - Modula-2 (mx) Port
 
-Back in 1988 or so, I read about *The Faery Tale Adventure* for the Amiga in a computer magazine. The screenshots and the sheer scale of the game (something like ~17,000 screens) completely blew me away. I didn’t even own an Amiga at the time, but suddenly I really wanted one just to play this. I actually remember asking my Nan in the UK to buy me the game before I even had the machine. I still have the original sleeve, map, and the 3.5" floppy it came on.
+Back in 1988 or so, I read about *The Faery Tale Adventure* for the Amiga in a computer magazine. The screenshots and description of the sheer size of the game, something like ~17,000 screens, just amazed me. I did not have an Amiga, but suddenly desperately wanted one so I could play this. I actually remember asking my Nan in the UK to buy the game for me before I even had the machine. I still have the original sleeve, map, and the 3.5" floppy it shipped on.
 
-Since then, I’ve played it on and off on real Amigas and via UAE. By modern standards it’s obviously dated, but I still enjoy it, mostly for the nostalgia, though the fantasy setting has always kept it appealing. I did finish it back in the day, and I’ve always thought it deserved a sequel.
+Since then I have played it on and off on real Amigas and via UAE. By modern standards it is not brilliant, but I still thoroughly enjoy it for nostalgia reasons, and the fantasy theme has always kept me coming back. I finished the game back in the day, and have always wanted to see a sequel.
 
-Years later, Talin (David Joiner), the original “jack of all trades” behind the game, released the source code on GitHub. It’s a mix of 68k assembler and C, not the easiest to follow, and full of Amiga-specific hardware tricks, but it’s also a bit of a masterclass in algorithms and data structures.
+Years later, Talin (David Joiner), the original "jack of all trades" behind this masterpiece, released the source code on GitHub. It is a mashup of 68k assembler and C, somewhat hard to follow and full of Amiga-specific hardware tricks, but the code really is a masterclass in algorithms and data structures.
 
-So with the source available, the obvious question was: now what? Some people have started porting it using modern abstractions like SDL, but I figured I’d take a different angle, why not try to port or recreate as much of it as possible using my own Modula-2 compiler, *mx*? It seemed like a solid way to stress test the compiler while scratching that long-standing nostalgic itch.
+So now I can see the source code behind the game. What next? Some people have started ports to other platforms using modern abstractions like SDL. I took a different approach. Why not try to port or recreate as much of it as possible using my own Modula-2 compiler, *mx*? It seemed like a good way to stress test the compiler.
 
-*mx* had already handled a few projects, but this pulled a lot of threads together. It pushed the compiler further and gave me a deeper appreciation for the original codebase. It wasn’t straightforward, but I hope the result does justice to the original, and maybe proves useful or interesting to others.
+*mx* had already been through a few projects, but this brought a lot of things together. It pushed the compiler further while letting me scratch that long-standing nostalgic itch.
 
-I’m immensely grateful to Talin for building the original game and then releasing the code all these years later.
+I am immensely grateful to Talin for building the original game and then releasing the code all these years later, and also to Xark for extracting the assets! I hope I have done it some justice. It was(is ) not a straightforward job, but hopefully the resulting code is useful or at least interesting to others.
+
+If you want to try *mx* or star the repo:
+https://github.com/fitzee/mx
+
+---
+
+| | | |
+|:---:|:---:|:---:|
+| ![](pics/img1.png) | ![](pics/img2.png) | ![](pics/img3.png) |
+| ![](pics/img4.png) | ![](pics/img5.png) | ![](pics/img6.png) |
+
+---
+
+## Current State
+
+Mostly done, roughly 90 percent.
+
+I have completed the main quest walkthrough to exercise different systems:
+- carrier riding such as swan and turtle
+- the witch in Grimwood
+- stone ring teleporting
+- the astral world
+- revival fairy
+
+Combat and enemy AI are close to the original, although this took the most time to get right.
+
+Object spawning is also close, though there may be some variability in where things appear.
+
+NPC interactions are close to original behavior. Day and night sequencing works, along with sleep and hunger mechanics. Inventory items behave as expected.
+
+---
+
+## What is not working or not final
+
+- Save game is still a work in progress. It currently only saves location and inventory. This is mainly for testing purposes.
+- Some animation sequences need another pass, for example drowning and falling.
+- The raft has not been tested yet. Swan and turtle work well, so it should be fine.
+- Occasional clipping edge cases still exist. These are not blockers but should be cleaned up.
+- Music is mostly correct, but sound effects are placeholders.
+- A full playthrough without cheats still needs to be done to validate overall game state.
+
+---
+
+## Planned improvements
+
+- Full screen mode
+- Controller and gamepad support
 
 ---
 
